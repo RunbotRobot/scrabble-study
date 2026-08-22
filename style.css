@@ -195,3 +195,71 @@ button.grade-incorrect { background: var(--bad); }
   color: var(--muted);
   font-size: 0.8rem;
 }
+
+.sync-blurb {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.sync-actions { margin-bottom: 0.75rem; }
+
+.sync-existing {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.9rem;
+}
+
+.sync-existing summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sync-existing form {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.sync-existing input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.sync-error {
+  color: var(--bad);
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+}
+
+.sync-code-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.sync-code-row code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.sync-status {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}

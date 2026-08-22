@@ -1,11 +1,14 @@
 import { loadDictionary } from './dictionary.js';
 import { addRandomWord, getNextDue, answerCard, getStats, getRecentWords } from './store.js';
+import { startBackgroundSync, scheduleSync, onStatusChange } from './sync.js';
+import { initSyncUI } from './sync-ui.js';
 
 const statsEl = document.getElementById('stats');
 const addWordBtn = document.getElementById('add-word-btn');
 const addWordResult = document.getElementById('add-word-result');
 const studyCard = document.getElementById('study-card');
 const recentWordsEl = document.getElementById('recent-words');
+const syncPanelEl = document.getElementById('sync-panel');
 
 function fmtDue(dueAtIso) {
   const ms = new Date(dueAtIso).getTime() - Date.now();
@@ -93,6 +96,7 @@ function grade(correct) {
   answerCard(currentCard.id, correct);
   refreshStats();
   loadNextCard();
+  scheduleSync();
 }
 
 addWordBtn.addEventListener('click', () => {
@@ -114,6 +118,7 @@ addWordBtn.addEventListener('click', () => {
     refreshStats();
     refreshRecentWords();
     loadNextCard();
+    scheduleSync();
   } catch (err) {
     addWordResult.textContent = `Error: ${err.message}`;
   } finally {
@@ -134,4 +139,18 @@ addWordBtn.addEventListener('click', () => {
   refreshStats();
   refreshRecentWords();
   loadNextCard();
+  initSyncUI(syncPanelEl);
+  startBackgroundSync();
+
+  // A background sync can pull in cards/words added on another device —
+  // reflect that without yanking away a card mid-review.
+  let wasSyncing = false;
+  onStatusChange((status) => {
+    if (wasSyncing && status.state !== 'syncing') {
+      refreshStats();
+      refreshRecentWords();
+      if (!currentCard) loadNextCard();
+    }
+    wasSyncing = status.state === 'syncing';
+  });
 })();

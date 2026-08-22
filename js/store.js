@@ -1,7 +1,8 @@
 /**
  * Persists study state (selected root words + flashcards + SRS progress)
- * in this browser's localStorage. Everything lives on-device only — there
- * is no server, so progress isn't synced across browsers or devices.
+ * in this browser's localStorage, which is always the fast/offline
+ * source of truth for the UI. js/sync.js layers cloud backup/cross-device
+ * sync on top of this — see there for how remote merges happen.
  */
 
 import { pickRandomWord, resolveRoots, wordCount } from './dictionary.js';
@@ -10,7 +11,6 @@ import { initialState, schedule } from './srs.js';
 
 const KEY_SELECTED = 'scrabbleStudy.selectedWords';
 const KEY_CARDS = 'scrabbleStudy.cards';
-const KEY_NEXT_ID = 'scrabbleStudy.nextId';
 
 const MAX_PICK_ATTEMPTS = 1000;
 
@@ -28,12 +28,6 @@ function save(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-function nextId() {
-  const id = load(KEY_NEXT_ID, 1);
-  save(KEY_NEXT_ID, id + 1);
-  return id;
-}
-
 function getSelected() {
   return load(KEY_SELECTED, []);
 }
@@ -42,16 +36,25 @@ function getCards() {
   return load(KEY_CARDS, []);
 }
 
+/** A card's identity is fully determined by what it's made of (root word,
+ * kind, and prompt), not by when/where it was created — so two devices
+ * that independently build "the same" card always agree on its id. This
+ * is what makes cross-device sync merge cleanly without coordination. */
+function cardId(type, rootWord, prompt) {
+  return [type, rootWord, prompt].join('␟');
+}
+
 function addRootToStudy(rootWord, viaWord, now, selected, cards) {
   const specs = buildCardSpecs(rootWord);
   if (!specs) return 0;
 
-  selected.push({ root_word: rootWord, via_word: viaWord, selected_at: now.toISOString() });
+  const nowIso = now.toISOString();
+  selected.push({ root_word: rootWord, via_word: viaWord, selected_at: nowIso, updated_at: nowIso });
 
   const base = initialState(now);
   for (const spec of specs) {
     cards.push({
-      id: nextId(),
+      id: cardId(spec.type, rootWord, spec.prompt),
       root_word: rootWord,
       type: spec.type,
       prompt: spec.prompt,
@@ -62,7 +65,8 @@ function addRootToStudy(rootWord, viaWord, now, selected, cards) {
       lapses: base.lapses,
       due_at: base.due_at,
       last_reviewed_at: base.last_reviewed_at,
-      created_at: now.toISOString(),
+      created_at: nowIso,
+      updated_at: nowIso,
     });
   }
   return specs.length;
@@ -116,7 +120,7 @@ export function answerCard(id, correct) {
     correct,
     now
   );
-  Object.assign(card, next);
+  Object.assign(card, next, { updated_at: now.toISOString() });
   save(KEY_CARDS, cards);
   return card;
 }
@@ -140,4 +144,42 @@ export function getRecentWords(limit = 25) {
     .slice()
     .sort((a, b) => (a.selected_at < b.selected_at ? 1 : a.selected_at > b.selected_at ? -1 : 0))
     .slice(0, limit);
+}
+
+// --- Sync support (see js/sync.js) -----------------------------------
+
+/** Rows changed strictly after `since` (or all rows, if `since` is
+ * null/undefined) — what this device needs to push. */
+export function getChangedSince(since) {
+  const selected = getSelected();
+  const cards = getCards();
+  return {
+    selectedWords: since ? selected.filter((r) => r.updated_at > since) : selected,
+    cards: since ? cards.filter((r) => r.updated_at > since) : cards,
+  };
+}
+
+/** Merges rows pulled from the server into local storage. Last-write-wins
+ * by `updated_at`, keyed by each table's natural identity — so applying
+ * the same remote rows twice (e.g. after a retried push) is always safe. */
+export function mergeRemote({ selectedWords = [], cards = [] }) {
+  const selected = getSelected();
+  const selectedByKey = new Map(selected.map((r) => [r.root_word, r]));
+  for (const remote of selectedWords) {
+    const existing = selectedByKey.get(remote.root_word);
+    if (!existing || remote.updated_at > existing.updated_at) {
+      selectedByKey.set(remote.root_word, remote);
+    }
+  }
+  save(KEY_SELECTED, [...selectedByKey.values()]);
+
+  const localCards = getCards();
+  const cardsByKey = new Map(localCards.map((r) => [r.id, r]));
+  for (const remote of cards) {
+    const existing = cardsByKey.get(remote.id);
+    if (!existing || remote.updated_at > existing.updated_at) {
+      cardsByKey.set(remote.id, remote);
+    }
+  }
+  save(KEY_CARDS, [...cardsByKey.values()]);
 }

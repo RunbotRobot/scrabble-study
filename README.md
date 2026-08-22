@@ -38,11 +38,26 @@ shrinks its ease, so missed cards resurface more often.
 
 ## Where your progress lives
 
-There's no account and no server: the browser you use it in stores your
-selected words and card progress in `localStorage`, on that device only.
-It isn't synced between devices/browsers, and clearing that browser's
-site data for this page erases it. If you study from multiple devices
-you'll build up separate progress on each.
+Every read/write always goes through this browser's `localStorage`
+first, so the app is fully usable offline and never blocks on the
+network. On top of that, a small Cloudflare Worker + D1 database (see
+`worker/`) acts as a durable backup and cross-device sync layer:
+
+- Tap **Start cloud sync** in the Cloud sync panel. This generates a
+  random "sync code" (there's no account/password — the code itself is
+  the credential, like a share link) and starts pushing your local
+  progress to the cloud.
+- On another device, enter the same code under "I already have a sync
+  code" to pull everything down.
+- If you lose or wipe this device, your progress isn't gone — set up a
+  fresh device with the same sync code.
+- Conflicts (e.g. answering the same card on two devices before they
+  sync) resolve last-write-wins per card; nothing is ever deleted.
+- If you never set up sync, or the network's unavailable, everything
+  still works exactly as before — just local to this browser.
+
+**Write your sync code down somewhere safe once you generate it** — it's
+the only way to link a second device or recover after losing this one.
 
 ## Running it locally
 
@@ -57,11 +72,36 @@ files directly, no server involved.
 
 ## Deploying
 
+### The site (GitHub Pages)
+
 GitHub Pages is configured to deploy from the `main` branch, `/` (root).
 Since Pages just serves whatever's committed (no build step), the built
 `data/dictionary.json` is committed to the repo — regenerate it with
 `npm run build:dictionary` and commit the result whenever
 `data/source/NWL2020.txt` changes.
+
+### The sync worker (Cloudflare)
+
+`.github/workflows/deploy-worker.yml` deploys `worker/` to Cloudflare
+Workers automatically on every push to `main` that touches `worker/`.
+One-time setup, in the Cloudflare dashboard and this repo's GitHub
+settings:
+
+1. Cloudflare dashboard → **My Profile → API Tokens → Create Token** →
+   use the **"Edit Cloudflare Workers"** template (covers Workers
+   Scripts + D1). Copy the token.
+2. This repo's GitHub **Settings → Secrets and variables → Actions**,
+   add two repository secrets:
+   - `CLOUDFLARE_API_TOKEN` — the token from step 1.
+   - `CLOUDFLARE_ACCOUNT_ID` — found on the right sidebar of any page in
+     the Cloudflare dashboard.
+3. Push (or re-run the workflow) — it deploys the worker and prints its
+   `*.workers.dev` URL in the run log.
+4. Paste that URL into `WORKER_URL` in `js/sync.js`, commit, push.
+
+The D1 database (`scrabble-study-db`) and its schema already exist —
+`worker/wrangler.toml` references it by ID, so a fresh deploy just picks
+it back up.
 
 ## Project layout
 
@@ -74,7 +114,10 @@ Since Pages just serves whatever's committed (no build step), the built
   - `js/jumble.js` — the custom-letter-order jumble function.
   - `js/srs.js` — the spaced-repetition scheduler.
   - `js/store.js` — persists selected words + cards + SRS state in
-    `localStorage`.
+    `localStorage`; exposes the merge primitives `js/sync.js` uses.
+  - `js/sync.js` — cloud backup/sync engine (push/pull against the
+    worker, last-write-wins merge, retry-friendly).
+  - `js/sync-ui.js` — the Cloud sync panel.
   - `js/app.js` — UI wiring.
 - `data/source/` — the raw Scrabble word list + attribution notes.
 - `data/dictionary.json` — built dictionary asset the browser fetches
@@ -82,3 +125,6 @@ Since Pages just serves whatever's committed (no build step), the built
 - `scripts/build-dictionary.js` — regenerates `data/dictionary.json` from
   the raw word list.
 - `scripts/serve.js` — local-only static file server for previewing.
+- `worker/` — the Cloudflare Worker (`index.js`) + its config
+  (`wrangler.toml`) for the sync backend.
+- `.github/workflows/deploy-worker.yml` — auto-deploys `worker/` on push.

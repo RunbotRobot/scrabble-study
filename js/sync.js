@@ -15,11 +15,7 @@
 
 import { getChangedSince, mergeRemote } from './store.js';
 
-// Filled in after the first deploy (see worker/wrangler.toml for the
-// worker name; the URL is <name>.<your-cloudflare-subdomain>.workers.dev).
-// Until then, sync fails closed with a clear status message — the app
-// stays fully usable locally regardless.
-const WORKER_URL = 'https://REPLACE-ME.workers.dev';
+const WORKER_URL = 'https://scrabble-study-sync.runbotrobot.workers.dev';
 
 const KEY_SYNC_ID = 'scrabbleStudy.syncId';
 const KEY_LAST_SYNC_AT = 'scrabbleStudy.lastSyncAt';

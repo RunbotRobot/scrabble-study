@@ -1,19 +1,11 @@
-'use strict';
+import { loadDictionary } from './dictionary.js';
+import { addRandomWord, getNextDue, answerCard, getStats, getRecentWords } from './store.js';
 
 const statsEl = document.getElementById('stats');
 const addWordBtn = document.getElementById('add-word-btn');
 const addWordResult = document.getElementById('add-word-result');
 const studyCard = document.getElementById('study-card');
 const recentWordsEl = document.getElementById('recent-words');
-
-async function api(path, options) {
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
-  return res.json();
-}
 
 function fmtDue(dueAtIso) {
   const ms = new Date(dueAtIso).getTime() - Date.now();
@@ -25,8 +17,8 @@ function fmtDue(dueAtIso) {
   return `in ${Math.round(hours / 24)} days`;
 }
 
-async function refreshStats() {
-  const stats = await api('/stats');
+function refreshStats() {
+  const stats = getStats();
   statsEl.innerHTML = `
     <div><dt>Words selected</dt><dd>${stats.selectedRootCount.toLocaleString()}</dd></div>
     <div><dt>Total cards</dt><dd>${stats.totalCards.toLocaleString()}</dd></div>
@@ -34,8 +26,8 @@ async function refreshStats() {
   `;
 }
 
-async function refreshRecentWords() {
-  const words = await api('/words/recent?limit=25');
+function refreshRecentWords() {
+  const words = getRecentWords(25);
   recentWordsEl.innerHTML = words
     .map(
       (w) =>
@@ -55,9 +47,7 @@ function cardTypeLabel(type) {
 
 function renderPrompt(card) {
   if (card.type === 'jumble') {
-    const tiles = [...card.prompt]
-      .map((ch) => `<span class="tile">${ch}</span>`)
-      .join('');
+    const tiles = [...card.prompt].map((ch) => `<span class="tile">${ch}</span>`).join('');
     return `<div class="jumble-tiles">${tiles}</div>`;
   }
   return `<div class="card-prompt">${card.prompt}</div>`;
@@ -65,8 +55,8 @@ function renderPrompt(card) {
 
 let currentCard = null;
 
-async function loadNextCard() {
-  const { due, nextDueAt } = await api('/study/next');
+function loadNextCard() {
+  const { due, nextDueAt } = getNextDue(1);
   if (due.length === 0) {
     currentCard = null;
     studyCard.innerHTML = `<p class="card-empty">${
@@ -98,20 +88,22 @@ function showAnswer() {
   studyCard.querySelector('.grade-incorrect').addEventListener('click', () => grade(false));
 }
 
-async function grade(correct) {
+function grade(correct) {
   if (!currentCard) return;
-  await api(`/study/${currentCard.id}/answer`, {
-    method: 'POST',
-    body: JSON.stringify({ correct }),
-  });
-  await Promise.all([refreshStats(), loadNextCard()]);
+  answerCard(currentCard.id, correct);
+  refreshStats();
+  loadNextCard();
 }
 
-addWordBtn.addEventListener('click', async () => {
+addWordBtn.addEventListener('click', () => {
   addWordBtn.disabled = true;
   addWordResult.textContent = 'Picking a word…';
   try {
-    const result = await api('/words/add-random', { method: 'POST' });
+    const result = addRandomWord();
+    if (!result.ok) {
+      addWordResult.textContent = result.message;
+      return;
+    }
     const rootsText = result.newRoots.join(', ');
     addWordResult.textContent =
       result.pickedWord === rootsText
@@ -119,7 +111,9 @@ addWordBtn.addEventListener('click', async () => {
         : `Picked "${result.pickedWord}" → added root${
             result.newRoots.length > 1 ? 's' : ''
           } ${rootsText} (${result.cardsAdded} cards).`;
-    await Promise.all([refreshStats(), refreshRecentWords(), loadNextCard()]);
+    refreshStats();
+    refreshRecentWords();
+    loadNextCard();
   } catch (err) {
     addWordResult.textContent = `Error: ${err.message}`;
   } finally {
@@ -128,5 +122,16 @@ addWordBtn.addEventListener('click', async () => {
 });
 
 (async function init() {
-  await Promise.all([refreshStats(), refreshRecentWords(), loadNextCard()]);
+  studyCard.innerHTML = '<p class="card-empty">Loading dictionary&hellip;</p>';
+  addWordBtn.disabled = true;
+  try {
+    await loadDictionary();
+  } catch (err) {
+    studyCard.innerHTML = `<p class="card-empty">Failed to load dictionary: ${err.message}</p>`;
+    return;
+  }
+  addWordBtn.disabled = false;
+  refreshStats();
+  refreshRecentWords();
+  loadNextCard();
 })();

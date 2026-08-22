@@ -1,4 +1,3 @@
-'use strict';
 /**
  * Minimal SM-2-style spaced repetition scheduler with a binary grade
  * (correct / incorrect), since flashcards here are self-graded flip
@@ -17,7 +16,7 @@ const SECOND_INTERVAL_DAYS = 6;
  * re-quizzed more often within the same study session. */
 const LAPSE_INTERVAL_DAYS = 10 / (24 * 60);
 
-function initialState(now = new Date()) {
+export function initialState(now = new Date()) {
   return {
     interval_days: 0,
     ease: DEFAULT_EASE,
@@ -30,7 +29,7 @@ function initialState(now = new Date()) {
 
 /** Returns the next SRS state given the current one and whether the
  * answer was correct. Does not mutate the input. */
-function schedule(state, correct, now = new Date()) {
+export function schedule(state, correct, now = new Date()) {
   const next = { ...state };
   next.last_reviewed_at = now.toISOString();
 
@@ -56,4 +55,4 @@ function schedule(state, correct, now = new Date()) {
   return next;
 }
 
-module.exports = { initialState, schedule, DEFAULT_EASE, MIN_EASE };
+export { DEFAULT_EASE, MIN_EASE };

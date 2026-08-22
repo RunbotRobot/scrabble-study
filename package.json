@@ -2,15 +2,11 @@
   "name": "scrabble-study",
   "version": "1.0.0",
   "private": true,
-  "description": "Personal Scrabble word study app with spaced-repetition flashcards.",
+  "description": "Personal Scrabble word study app with spaced-repetition flashcards. Static site, no server required.",
   "type": "commonjs",
-  "main": "server/index.js",
   "scripts": {
     "build:dictionary": "node scripts/build-dictionary.js",
-    "start": "node server/index.js",
-    "dev": "node server/index.js"
+    "serve": "node scripts/serve.js"
   },
-  "dependencies": {
-    "express": "^4.19.2"
-  }
+  "dependencies": {}
 }

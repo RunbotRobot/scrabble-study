@@ -1,7 +1,5 @@
-'use strict';
-
-const { getRootSenses } = require('./dictionary');
-const { jumble } = require('./jumble');
+import { getRootSenses } from './dictionary.js';
+import { jumble } from './jumble.js';
 
 /** Builds the flashcard specs for a root word: a word->definition card,
  * a definition->word card, and one jumble card per distinct conjugated /
@@ -9,7 +7,7 @@ const { jumble } = require('./jumble');
  *
  * Returns null if `rootWord` isn't actually a root (has no real senses).
  */
-function buildCardSpecs(rootWord) {
+export function buildCardSpecs(rootWord) {
   const senses = getRootSenses(rootWord);
   if (!senses) return null;
 
@@ -32,5 +30,3 @@ function buildCardSpecs(rootWord) {
 
   return specs;
 }
-
-module.exports = { buildCardSpecs };

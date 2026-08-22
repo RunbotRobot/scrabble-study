@@ -1,7 +1,9 @@
 # Scrabble Study
 
 A personal flashcard app for studying the Scrabble dictionary (NASPA Word
-List 2020), built with spaced repetition.
+List 2020), built with spaced repetition. It's a fully static site — no
+server, no backend, no Node required on the device you study on. Deployed
+via GitHub Pages at **https://runbotrobot.github.io/scrabble-study/**.
 
 ## How word selection works
 
@@ -34,24 +36,49 @@ reps/lapses). Answering a card correctly pushes its next appearance
 further out; answering incorrectly brings it back soon (10 minutes) and
 shrinks its ease, so missed cards resurface more often.
 
-## Running it
+## Where your progress lives
+
+There's no account and no server: the browser you use it in stores your
+selected words and card progress in `localStorage`, on that device only.
+It isn't synced between devices/browsers, and clearing that browser's
+site data for this page erases it. If you study from multiple devices
+you'll build up separate progress on each.
+
+## Running it locally
 
 ```bash
-npm install
-npm start
+npm run build:dictionary   # parses data/source/NWL2020.txt -> data/dictionary.json (only needed if you edit the source data)
+npm run serve               # zero-dependency static file server, for local preview only
 ```
 
-Then open http://localhost:3000. The dictionary is parsed from
-`data/source/NWL2020.txt` into `data/dictionary.sqlite` automatically on
-first run (this is gitignored, derived data). Your selected words and
-review progress live in `data/study.sqlite` (also gitignored — it's your
-personal, growing study state, not something to check in).
+Then open http://localhost:8080. `npm run serve` is purely a local dev
+convenience — the deployed site on GitHub Pages serves the same static
+files directly, no server involved.
+
+## Deploying
+
+GitHub Pages is configured to deploy from the `main` branch, `/` (root).
+Since Pages just serves whatever's committed (no build step), the built
+`data/dictionary.json` is committed to the repo — regenerate it with
+`npm run build:dictionary` and commit the result whenever
+`data/source/NWL2020.txt` changes.
 
 ## Project layout
 
+- `index.html`, `style.css`, `js/` — the static site (ES modules, no
+  bundler, no framework).
+  - `js/dictionary.js` — fetches/parses `data/dictionary.json`, random
+    word selection, root resolution.
+  - `js/cards.js` — builds flashcard specs (word↔definition, jumbles)
+    for a root word.
+  - `js/jumble.js` — the custom-letter-order jumble function.
+  - `js/srs.js` — the spaced-repetition scheduler.
+  - `js/store.js` — persists selected words + cards + SRS state in
+    `localStorage`.
+  - `js/app.js` — UI wiring.
 - `data/source/` — the raw Scrabble word list + attribution notes.
-- `scripts/build-dictionary.js` — parses the raw word list into
-  `data/dictionary.sqlite` (roots, senses, inflections, cross-references).
-- `server/` — Express API + study/SRS logic (`node:sqlite`, no native
-  dependencies).
-- `public/` — plain HTML/CSS/JS frontend.
+- `data/dictionary.json` — built dictionary asset the browser fetches
+  (committed, since GitHub Pages doesn't run a build step).
+- `scripts/build-dictionary.js` — regenerates `data/dictionary.json` from
+  the raw word list.
+- `scripts/serve.js` — local-only static file server for previewing.

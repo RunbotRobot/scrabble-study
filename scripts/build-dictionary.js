@@ -1,6 +1,7 @@
 'use strict';
 /**
- * Parses data/source/NWL2020.txt into data/dictionary.sqlite.
+ * Parses data/source/NWL2020.txt into data/dictionary.json, a single
+ * static asset the browser fetches at runtime (no server-side database).
  *
  * Line format (one entry per surface word):
  *   WORD sense1 [pos1 INFL, INFL, ...] / sense2 [pos2 ...] / ...
@@ -10,19 +11,24 @@
  *   - exactly "<otherword=pos>", meaning WORD (as that pos) is purely an
  *     inflected form of otherword.
  *
- * Output tables:
- *   roots(word, senses_json)      -- words that have >=1 real sense
- *   crossrefs(word, pos, root)    -- words that are (for that pos) purely
- *                                     an inflected form of `root`
- *   word_index(word)              -- every surface word, for random pick
+ * Output shape:
+ *   {
+ *     words: {
+ *       WORD: {
+ *         s?: [{ p: pos, d: definition, i: [inflection, ...] }, ...],  // real senses, if any
+ *         x?: [{ p: pos, r: rootWord }, ...]                          // crossref senses, if any
+ *       },
+ *       ...
+ *     }
+ *   }
+ * The full word list (for random selection) is just Object.keys(words).
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { DatabaseSync } = require('node:sqlite');
 
 const SOURCE = path.join(__dirname, '..', 'data', 'source', 'NWL2020.txt');
-const OUT = path.join(__dirname, '..', 'data', 'dictionary.sqlite');
+const OUT = path.join(__dirname, '..', 'data', 'dictionary.json');
 
 const CROSSREF_RE = /^<([a-z]+)=([a-z]+)>$/i;
 const SHORTHAND_RE = /\{([a-z]+)=[a-z]+\}/gi;
@@ -38,10 +44,8 @@ function parseLine(line) {
   if (spaceIdx === -1) return null; // shouldn't happen
   const word = line.slice(0, spaceIdx);
   let rest = line.slice(spaceIdx + 1);
-  let addedYear = null;
   const yearMatch = rest.match(YEAR_SUFFIX_RE);
   if (yearMatch) {
-    addedYear = Number(yearMatch[1]);
     rest = rest.slice(0, yearMatch.index);
   }
 
@@ -71,76 +75,44 @@ function parseLine(line) {
     }
   }
 
-  return { word, senses, addedYear };
+  return { word, senses };
 }
 
 function main() {
-  if (fs.existsSync(OUT)) fs.unlinkSync(OUT);
-  const db = new DatabaseSync(OUT);
-
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    CREATE TABLE roots (
-      word TEXT PRIMARY KEY,
-      senses_json TEXT NOT NULL
-    );
-    CREATE TABLE crossrefs (
-      word TEXT NOT NULL,
-      pos TEXT NOT NULL,
-      root TEXT NOT NULL,
-      PRIMARY KEY (word, pos, root)
-    );
-    CREATE TABLE word_index (
-      word TEXT PRIMARY KEY
-    );
-  `);
-
-  const insertRoot = db.prepare('INSERT INTO roots (word, senses_json) VALUES (?, ?)');
-  const insertCrossref = db.prepare('INSERT INTO crossrefs (word, pos, root) VALUES (?, ?, ?)');
-  const insertWordIndex = db.prepare('INSERT OR IGNORE INTO word_index (word) VALUES (?)');
-
   const raw = fs.readFileSync(SOURCE, 'utf8');
   const lines = raw.split('\n').filter((l) => l.trim().length > 0);
 
-  db.exec('BEGIN');
+  const words = {};
   let rootCount = 0;
   let crossrefCount = 0;
+
   for (const line of lines) {
     const parsed = parseLine(line.trimEnd());
     if (!parsed) continue;
     const { word, senses } = parsed;
 
-    insertWordIndex.run(word);
-
+    const entry = {};
     const realSenses = senses.filter((s) => s.type === 'real');
     if (realSenses.length > 0) {
-      insertRoot.run(
-        word,
-        JSON.stringify(
-          realSenses.map((s) => ({
-            pos: s.pos,
-            definition: s.definition,
-            inflections: s.inflections,
-          }))
-        )
-      );
+      entry.s = realSenses.map((s) => ({ p: s.pos, d: s.definition, i: s.inflections }));
       rootCount++;
     }
-
-    for (const s of senses) {
-      if (s.type === 'crossref') {
-        insertCrossref.run(word, s.pos, s.root);
-        crossrefCount++;
-      }
+    const crossrefSenses = senses.filter((s) => s.type === 'crossref');
+    if (crossrefSenses.length > 0) {
+      entry.x = crossrefSenses.map((s) => ({ p: s.pos, r: s.root }));
+      crossrefCount += crossrefSenses.length;
     }
+    words[word] = entry;
   }
-  db.exec('COMMIT');
 
-  db.exec('CREATE INDEX idx_crossrefs_word ON crossrefs (word)');
+  fs.writeFileSync(OUT, JSON.stringify({ words }));
 
-  const wordCount = db.prepare('SELECT COUNT(*) AS c FROM word_index').get().c;
-  console.log(`Parsed ${lines.length} lines -> ${wordCount} words, ${rootCount} roots, ${crossrefCount} crossrefs.`);
-  db.close();
+  const wordCount = Object.keys(words).length;
+  const sizeMb = (fs.statSync(OUT).size / (1024 * 1024)).toFixed(2);
+  console.log(
+    `Parsed ${lines.length} lines -> ${wordCount} words, ${rootCount} roots, ${crossrefCount} crossrefs. ` +
+      `Wrote ${OUT} (${sizeMb} MB).`
+  );
 }
 
 main();

@@ -1,0 +1,16 @@
+{
+  "name": "scrabble-study",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal Scrabble word study app with spaced-repetition flashcards.",
+  "type": "commonjs",
+  "main": "server/index.js",
+  "scripts": {
+    "build:dictionary": "node scripts/build-dictionary.js",
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scrabble Study</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Scrabble Study</h1>
+    <dl id="stats" class="stats"></dl>
+  </header>
+
+  <main>
+    <section class="panel">
+      <button id="add-word-btn">Add a random word</button>
+      <p id="add-word-result" class="add-result"></p>
+    </section>
+
+    <section class="panel" id="study-panel">
+      <h2>Study</h2>
+      <div id="study-card" class="card">
+        <p class="card-empty">Loading&hellip;</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Recently added words</h2>
+      <ul id="recent-words" class="recent-words"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

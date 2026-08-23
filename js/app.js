@@ -9,23 +9,13 @@ const milestoneMessageEl = document.getElementById('milestone-message');
 const studyCard = document.getElementById('study-card');
 const syncPanelEl = document.getElementById('sync-panel');
 
-function fmtDue(dueAtIso) {
-  const ms = new Date(dueAtIso).getTime() - Date.now();
-  if (ms <= 0) return 'now';
-  const mins = Math.round(ms / 60000);
-  if (mins < 60) return `in ${mins} min`;
-  const hours = Math.round(mins / 60);
-  if (hours < 48) return `in ${hours} hr`;
-  return `in ${Math.round(hours / 24)} days`;
-}
-
 function refreshStats() {
   const stats = getStats();
   statsEl.innerHTML = `
     <div><dt>Words selected</dt><dd>${stats.selectedRootCount.toLocaleString()}</dd></div>
     <div><dt>Total cards</dt><dd>${stats.totalCards.toLocaleString()}</dd></div>
-    <div><dt>Due now</dt><dd>${stats.dueNow.toLocaleString()}</dd></div>
     ${stats.introducing > 0 ? `<div><dt>Introducing</dt><dd>${stats.introducing.toLocaleString()}</dd></div>` : ''}
+    ${stats.recentlyWrong > 0 ? `<div><dt>Recently wrong</dt><dd>${stats.recentlyWrong.toLocaleString()}/50</dd></div>` : ''}
     <div><dt>Streak</dt><dd>${getStreak().toLocaleString()}</dd></div>
   `;
 }
@@ -75,12 +65,10 @@ function renderWordDefCard(card, revealed) {
 let currentCard = null;
 
 function loadNextCard() {
-  const { card, introRemaining, nextDueAt } = getNextCard();
+  const { card, introRemaining } = getNextCard();
   if (!card) {
     currentCard = null;
-    studyCard.innerHTML = `<p class="card-empty">${
-      nextDueAt ? `All caught up. Next card due ${fmtDue(nextDueAt)}.` : 'No cards yet.'
-    }</p>`;
+    studyCard.innerHTML = '<p class="card-empty">No cards yet.</p>';
     return;
   }
   currentCard = card;
@@ -119,7 +107,7 @@ function showAnswer() {
 
 function grade(correct) {
   if (!currentCard) return;
-  answerCard(currentCard.id, correct);
+  const { mistakeBatch } = answerCard(currentCard.id, correct);
 
   const { streak, milestoneHit } = recordAnswer(correct);
   if (milestoneHit) {
@@ -127,6 +115,10 @@ function grade(correct) {
     milestoneMessageEl.textContent = result.ok
       ? `🔥 ${streak} in a row! Added ${result.cardsAdded} new card${result.cardsAdded === 1 ? '' : 's'} across ${result.wordsAdded} word${result.wordsAdded === 1 ? '' : 's'} to learn.`
       : `🔥 ${streak} in a row! Couldn't find any new words to add — you may have studied the whole dictionary.`;
+  } else if (mistakeBatch) {
+    milestoneMessageEl.textContent = `📌 ${mistakeBatch.cardCount} recently-missed card${
+      mistakeBatch.cardCount === 1 ? '' : 's'
+    } — let's drill ${mistakeBatch.cardCount === 1 ? 'it' : 'them'} intensively.`;
   }
 
   refreshStats();

@@ -51,19 +51,44 @@ of new cards (see above).
 
 A freshly-generated batch is drilled intensively: while any of its cards
 haven't yet been answered correctly twice, they take over the study queue
-entirely (cycled round-robin, ignoring normal spaced-repetition due
-dates) ahead of anything else due for review, and the *next* card is
-picked at random among however many are equally "least recently seen" —
-not, say, always the word→definition card immediately followed by its
-own definition→word twin, which would make the second one trivial. Once
-a card's had two correct answers, it graduates into the normal
-spaced-repetition rotation like any other card, and once every card in
-the batch has graduated, due reviews resume as normal.
+entirely (cycled round-robin, ignoring review priority — see below)
+ahead of anything else, and the *next* card is picked at random among
+however many are equally "least recently seen" — not, say, always the
+word→definition card immediately followed by its own definition→word
+twin, which would make the second one trivial. Once a card's had two
+correct answers, it graduates into the normal review rotation like any
+other card, and once every card in the batch has graduated, normal
+review resumes.
 
 The very first batch, before you've ever gotten anything right to build a
 streak with, is seeded automatically the first time the app has zero
 cards (after giving cloud sync, if configured, a chance to pull down
 existing progress first).
+
+## Review priority
+
+Once a card's graduated out of intro drilling, there's no due/not-due
+cutoff gating whether it can come up — every graduated card is always
+eligible, ranked by a priority score, and the highest-priority one is
+always what's shown next. (This is deliberate: a hard due date means you
+eventually run out of due cards and hit a dead end with nothing left to
+study, even though you have plenty of cards that could still use
+review.) Priority combines two things:
+
+- how overdue it is, as a fraction of its own spaced-repetition interval
+  — a 1-day-old card that's 2 days late is more urgent than a 30-day-old
+  card that's also 2 days late, even though the raw lateness is the same
+- how much harder than average it's been recently, via the same `ease`
+  value the SM-2 scheduler already tracks (it falls on a miss, rises on
+  a streak of correct answers)
+
+## Tracking recent mistakes
+
+Missing a graduated card adds it to a running "recently missed" pile;
+getting it right again removes it. Once that pile reaches 50 distinct
+cards, all 50 go back into intensive intro drilling together (the exact
+same mechanism as a fresh batch of new words), and the pile resets to
+build up again from there.
 
 ## Card presentation
 
@@ -107,6 +132,11 @@ network. On top of that, a small Cloudflare Worker + D1 database (see
 
 **Write your sync code down somewhere safe once you generate it** — it's
 the only way to link a second device or recover after losing this one.
+
+Two things are intentionally **not** synced, since they're per-device
+session bookkeeping rather than study data: your current correct-answer
+streak, and the "recently missed" pile. Study from more than one device
+and each builds up its own streak/pile independently.
 
 ## Running it locally
 

@@ -1,19 +1,10 @@
 import { getSyncId, generateSyncId, isValidSyncId, setSyncId, forgetSyncId, onStatusChange } from './sync.js';
 
-function fmtAgo(iso) {
-  if (!iso) return 'never';
-  const secs = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
-  if (secs < 5) return 'just now';
-  if (secs < 60) return `${secs}s ago`;
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins} min ago`;
-  return `${Math.round(mins / 60)} hr ago`;
-}
-
+// Only ever shows something for a genuine, ongoing problem — not
+// "Syncing…"/"Synced 3s ago" churn on every routine round trip, which is
+// just noise once sync is working.
 function statusLine(status) {
-  if (status.state === 'syncing') return 'Syncing…';
-  if (status.state === 'error') return `Sync error (will retry): ${status.lastError}`;
-  return `Synced ${fmtAgo(status.lastSyncAt)}`;
+  return status.state === 'error' ? `Sync error (will retry): ${status.lastError}` : '';
 }
 
 export function initSyncUI(container) {

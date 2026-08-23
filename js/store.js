@@ -7,17 +7,24 @@
 
 import { pickRandomWord, resolveRoots, wordCount } from './dictionary.js';
 import { buildCardSpecs } from './cards.js';
-import { initialState, schedule } from './srs.js';
+import { initialState, schedule, DEFAULT_EASE } from './srs.js';
 
 const KEY_SELECTED = 'scrabbleStudy.selectedWords';
 const KEY_CARDS = 'scrabbleStudy.cards';
+const KEY_RECENTLY_WRONG = 'scrabbleStudy.recentlyWrong';
 
 const MAX_PICK_ATTEMPTS = 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /** New cards graduate out of the intensive "intro" rotation once they've
  * been answered correctly this many times (matches the SM-2 scheduler's
  * own first two learning steps — see js/srs.js). */
 const INTRO_GRADUATION_REPS = 2;
+
+/** Once this many distinct review-phase cards are sitting in the
+ * "recently missed" pile at once, they all go back into intensive intro
+ * drilling together — see answerCard. */
+const MISTAKE_BATCH_SIZE = 50;
 
 function load(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -44,6 +51,10 @@ function getCards() {
     phase: c.phase || 'review',
     deleted: c.deleted || 0,
   }));
+}
+
+function getRecentlyWrong() {
+  return load(KEY_RECENTLY_WRONG, []);
 }
 
 /** A card's identity is fully determined by what it's made of (root word,
@@ -134,11 +145,31 @@ export function generateIntroBatch(minCards = 50) {
   return { ok: cardsAdded > 0, cardsAdded, wordsAdded, roots };
 }
 
+/** How urgently a graduated ("review"-phase) card needs quizzing again,
+ * higher = more urgent. Two things drive it, both continuous rather than
+ * a due/not-due cutoff — so there's always a next-most-useful card to
+ * show instead of ever running dry with cards left to study:
+ *   - how overdue it is, as a fraction of its own interval (a 1-day-old
+ *     card two days late is more urgent than a 30-day-old card two days
+ *     late — same raw lateness, very different relative staleness)
+ *   - how much harder than average it's been recently (its `ease` has
+ *     already fallen from getting missed, or risen from streaks of
+ *     correct answers — SM-2's own running difficulty signal)
+ */
+function reviewPriority(card, nowMs) {
+  const dueAtMs = new Date(card.due_at).getTime();
+  const intervalMs = Math.max(card.interval_days, 1) * ONE_DAY_MS;
+  const overdueRatio = (nowMs - dueAtMs) / intervalMs;
+  const difficulty = DEFAULT_EASE - card.ease;
+  return overdueRatio + difficulty;
+}
+
 /** The card to show next: any card still in its intensive "intro"
  * rotation takes priority over everything else (least-recently-shown
  * first), regardless of due date — that's what makes it intensive. Once
- * there are no intro cards left, falls back to normal due-date-gated
- * review. */
+ * there are no intro cards left, the highest-priority graduated card is
+ * shown (see reviewPriority) — there's no due-date gate, so this only
+ * comes back empty if there are truly no cards at all. */
 export function getNextCard() {
   const cards = getCards().filter((c) => !c.deleted);
 
@@ -161,34 +192,76 @@ export function getNextCard() {
     return { card, introRemaining: intro.length };
   }
 
-  const now = new Date().toISOString();
-  const due = cards.filter((c) => c.due_at <= now).sort((a, b) => (a.due_at < b.due_at ? -1 : 1));
-  if (due.length > 0) return { card: due[0], introRemaining: 0 };
+  const reviewPool = cards.filter((c) => c.phase === 'review');
+  if (reviewPool.length === 0) return { card: null, introRemaining: 0 };
 
-  const nextDueAt = cards.reduce((min, c) => (min === null || c.due_at < min ? c.due_at : min), null);
-  return { card: null, introRemaining: 0, nextDueAt };
+  const nowMs = Date.now();
+  let best = reviewPool[0];
+  let bestPriority = reviewPriority(best, nowMs);
+  for (let i = 1; i < reviewPool.length; i++) {
+    const priority = reviewPriority(reviewPool[i], nowMs);
+    if (priority > bestPriority) {
+      best = reviewPool[i];
+      bestPriority = priority;
+    }
+  }
+  return { card: best, introRemaining: 0 };
 }
 
+/** Grades a card and updates its SRS state. For a graduated ("review"-
+ * phase) card, also maintains the rolling "recently missed" pile: a miss
+ * adds it, a subsequent correct answer removes it again, and once the
+ * pile reaches MISTAKE_BATCH_SIZE distinct cards they're all sent back
+ * into intensive intro drilling together (same mechanism as a fresh
+ * batch of new words) and the pile resets. Returns the updated card and,
+ * on the batch just triggering, { cardCount }. */
 export function answerCard(id, correct) {
   const cards = getCards();
   const card = cards.find((c) => c.id === id);
   if (!card) return null;
   const now = new Date();
+  const nowIso = now.toISOString();
+  const wasReview = card.phase === 'review';
+
   const next = schedule(
     { interval_days: card.interval_days, ease: card.ease, reps: card.reps, lapses: card.lapses },
     correct,
     now
   );
-  Object.assign(card, next, { updated_at: now.toISOString() });
+  Object.assign(card, next, { updated_at: nowIso });
   if (card.phase === 'intro' && card.reps >= INTRO_GRADUATION_REPS) {
     card.phase = 'review';
   }
+
+  let mistakeBatch = null;
+  if (wasReview) {
+    let recentlyWrong = getRecentlyWrong();
+    if (correct) {
+      recentlyWrong = recentlyWrong.filter((x) => x !== id);
+    } else if (!recentlyWrong.includes(id)) {
+      recentlyWrong = [...recentlyWrong, id];
+    }
+    if (recentlyWrong.length >= MISTAKE_BATCH_SIZE) {
+      let cardCount = 0;
+      for (const wrongId of recentlyWrong) {
+        const c = cards.find((x) => x.id === wrongId);
+        if (!c) continue;
+        c.phase = 'intro';
+        c.reps = 0;
+        c.updated_at = nowIso;
+        cardCount++;
+      }
+      mistakeBatch = { cardCount };
+      recentlyWrong = [];
+    }
+    save(KEY_RECENTLY_WRONG, recentlyWrong);
+  }
+
   save(KEY_CARDS, cards);
-  return card;
+  return { card, mistakeBatch };
 }
 
 export function getStats() {
-  const now = new Date().toISOString();
   const cards = getCards().filter((c) => !c.deleted);
   const byType = {};
   for (const c of cards) byType[c.type] = (byType[c.type] || 0) + 1;
@@ -196,8 +269,8 @@ export function getStats() {
     dictionaryWordCount: wordCount(),
     selectedRootCount: getSelected().length,
     totalCards: cards.length,
-    dueNow: cards.filter((c) => c.due_at <= now && c.phase !== 'intro').length,
     introducing: cards.filter((c) => c.phase === 'intro').length,
+    recentlyWrong: getRecentlyWrong().length,
     cardsByType: byType,
   };
 }

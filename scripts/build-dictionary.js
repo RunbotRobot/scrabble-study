@@ -7,7 +7,11 @@
  *   WORD sense1 [pos1 INFL, INFL, ...] / sense2 [pos2 ...] / ...
  * where each sense is either:
  *   - a real definition, optionally containing {otherword=pos} shorthand
- *     refs, or
+ *     refs, and optionally followed by " : OTHERWORD [pos]" — a pointer
+ *     to a "self-explanatory" derived word (its own crossref-only entry
+ *     elsewhere, e.g. "ANERGY lack of energy [n ANERGIES] : ANERGIC
+ *     [adj]" points at ANERGIC, an adjective derived from ANERGY that
+ *     needs no separate definition of its own), or
  *   - exactly "<otherword=pos>", meaning WORD (as that pos) is purely an
  *     inflected form of otherword.
  *
@@ -15,8 +19,8 @@
  *   {
  *     words: {
  *       WORD: {
- *         s?: [{ p: pos, d: definition, i: [inflection, ...] }, ...],  // real senses, if any
- *         x?: [{ p: pos, r: rootWord }, ...]                          // crossref senses, if any
+ *         s?: [{ p: pos, d: definition, i: [inflection, ...], e?: [{ p: pos, w: word }, ...] }, ...],  // real senses, if any ('e' = self-explanatory derived forms)
+ *         x?: [{ p: pos, r: rootWord }, ...]                                                            // crossref senses, if any
  *       },
  *       ...
  *     }
@@ -32,6 +36,7 @@ const OUT = path.join(__dirname, '..', 'data', 'dictionary.json');
 
 const CROSSREF_RE = /^<([a-z]+)=([a-z]+)>$/i;
 const SHORTHAND_RE = /\{([a-z]+)=[a-z]+\}/gi;
+const DERIVED_SUFFIX_RE = /\s*:\s*([A-Z]+)\s*\[([a-z]+)\]$/i;
 const SENSE_RE = /^(.*?)\[([a-z]+)\s*([^\]]*)\]$/i;
 const YEAR_SUFFIX_RE = /\s\((\d{4})\)$/;
 
@@ -53,7 +58,20 @@ function parseLine(line) {
   const senses = [];
 
   for (const senseText of senseTexts) {
-    const m = senseText.match(SENSE_RE);
+    // Strip a trailing " : OTHERWORD [pos]" self-explanatory-derivative
+    // pointer *before* matching the sense's own bracket — otherwise its
+    // "[pos]" (with no inflections) is what SENSE_RE's end anchor grabs,
+    // stranding the sense's real "[pos INFL, ...]" bracket in the middle
+    // of the definition text instead of being parsed out.
+    let text = senseText;
+    let derived = null;
+    const derivedMatch = text.match(DERIVED_SUFFIX_RE);
+    if (derivedMatch) {
+      derived = { pos: derivedMatch[2].toLowerCase(), word: derivedMatch[1].toUpperCase() };
+      text = text.slice(0, derivedMatch.index);
+    }
+
+    const m = text.match(SENSE_RE);
     if (!m) {
       throw new Error(`Could not parse sense in line: ${line}`);
     }
@@ -71,6 +89,7 @@ function parseLine(line) {
         pos,
         definition: cleanDefinition(defPart),
         inflections,
+        derived: derived ? [derived] : [],
       });
     }
   }
@@ -94,7 +113,11 @@ function main() {
     const entry = {};
     const realSenses = senses.filter((s) => s.type === 'real');
     if (realSenses.length > 0) {
-      entry.s = realSenses.map((s) => ({ p: s.pos, d: s.definition, i: s.inflections }));
+      entry.s = realSenses.map((s) => {
+        const sense = { p: s.pos, d: s.definition, i: s.inflections };
+        if (s.derived.length > 0) sense.e = s.derived.map((d) => ({ p: d.pos, w: d.word }));
+        return sense;
+      });
       rootCount++;
     }
     const crossrefSenses = senses.filter((s) => s.type === 'crossref');

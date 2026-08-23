@@ -15,7 +15,10 @@
 </head>
 <body>
   <header>
-    <h1>Scrabble Study</h1>
+    <div class="header-row">
+      <h1>Scrabble Study</h1>
+      <button id="lookup-btn" class="lookup-btn" type="button" aria-label="Look up a word">?</button>
+    </div>
     <dl id="stats" class="stats"></dl>
   </header>
 
@@ -29,15 +32,12 @@
     </section>
 
     <section class="panel">
-      <h2>Add a word</h2>
-      <div id="queue-panel"></div>
-    </section>
-
-    <section class="panel">
       <h2>Cloud sync</h2>
       <div id="sync-panel"></div>
     </section>
   </main>
+
+  <div id="lookup-modal-root"></div>
 
   <script type="module" src="js/app.js"></script>
   <script>

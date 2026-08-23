@@ -32,13 +32,23 @@ export function pickRandomWord() {
   return wordList[i];
 }
 
-/** Returns { pos, definition, inflections }[] for a root word's own real
- * senses, or null if `word` isn't a root for any sense. */
+/** Returns { pos, definition, inflections, derived }[] for a root word's
+ * own real senses, or null if `word` isn't a root for any sense.
+ * `derived` is that sense's "self-explanatory" derived forms (e.g.
+ * ANERGY's noun sense derives the adjective ANERGIC) — each itself a
+ * crossref-only entry elsewhere in the dictionary, so its own meaning
+ * follows straightforwardly from the root and doesn't need a definition
+ * of its own; { pos, word }[], possibly empty. */
 export function getRootSenses(word) {
   requireLoaded();
   const entry = words[word];
   if (!entry || !entry.s) return null;
-  return entry.s.map((s) => ({ pos: s.p, definition: s.d, inflections: s.i }));
+  return entry.s.map((s) => ({
+    pos: s.p,
+    definition: s.d,
+    inflections: s.i,
+    derived: (s.e || []).map((d) => ({ pos: d.p, word: d.w })),
+  }));
 }
 
 /** Returns the distinct root words that `word` resolves to: itself (if it

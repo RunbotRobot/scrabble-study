@@ -8,10 +8,11 @@ via GitHub Pages at **https://runbotrobot.github.io/scrabble-study/**.
 ## How word selection works
 
 New words arrive automatically, tied to a 50-answer correct streak (see
-below). You can also queue specific words yourself with the **Add word**
-button — type a word and it joins a queue (oldest first) that's drained
-before any random picks the next time a batch is generated, so words you
-ask for show up in the very next batch. Each time a batch is generated:
+below). You can also queue specific words yourself from the **?** lookup
+panel (see "Looking up a word" below) — its Add button joins a queue
+(oldest first) that's drained before any random picks the next time a
+batch is generated, so words you ask for show up in the very next batch.
+Each time a batch is generated:
 
 1. A word is picked — from your queue if it has anything waiting,
    otherwise at random from the *entire* word list (root, conjugated, or
@@ -23,16 +24,20 @@ ask for show up in the very next batch. Each time a batch is generated:
    parts of speech (e.g. `ARE` is its own noun root — a unit of surface
    measure — *and* the verb form of `BE`), and a plural/invariant word
    like `CATTLE` is simply its own root.
-3. For each newly-discovered root, three kinds of flashcards are created:
+3. For each newly-discovered root, up to four kinds of flashcards are
+   created:
    - **Word → Definition** and **Definition → Word** — only for roots 8
      letters or shorter. Longer roots skip these two entirely.
+   - **Endings** — also only for roots 8 letters or shorter; see "Endings
+     cards" below.
    - **Jumble** — one per distinct conjugated/pluralized form of the
      root that's 8 letters or shorter, with the letters arranged in the
      fixed custom order `QVUWGBFJYOPLKITMDCNHARZXES` (deterministic, not
      a random shuffle) — see "Jumbles and anagram solutions" below.
      Longer inflected forms don't get a jumble card.
    - A root with no dictionary definition on file (some newer Scrabble
-     words only have a part of speech, no gloss) only gets jumble cards.
+     words only have a part of speech, no gloss) only gets jumble cards
+     (plus an endings card, if it has conjugations/plurals or the like).
      A root longer than 8 letters with no short inflections either ends
      up contributing no cards at all — it's still recorded as selected,
      it just has nothing to quiz.
@@ -44,7 +49,9 @@ ask for show up in the very next batch. Each time a batch is generated:
 
 Definitions are shown verbatim from the source dictionary file (see
 `data/source/ATTRIBUTION.md`), aside from expanding its `{word=pos}`
-shorthand notation into the plain word it refers to.
+shorthand notation into the plain word it refers to, and pulling out any
+trailing "self-explanatory derived form" pointer (see "Endings cards")
+into its own card instead of leaving it stuck in the definition text.
 
 ## Streaks and introducing new cards
 
@@ -98,11 +105,13 @@ fully locked out.
 
 ## Tracking recent mistakes
 
-Missing a card — intro or graduated, any card at all — adds it to a
-running "recently missed" pile; getting it right again removes it. Once
-that pile reaches 50 distinct cards, all 50 go back into intensive intro
-drilling together (the exact same mechanism as a fresh batch of new
-words), and the pile resets to build up again from there.
+Missing an already-graduated ("review"-phase) card adds it to a running
+"recently missed" pile; getting it right again removes it. Once that pile
+reaches 50 distinct cards, all 50 go back into intensive intro drilling
+together (the exact same mechanism as a fresh batch of new words), and
+the pile resets to build up again from there. Misses on intro-phase cards
+don't feed this pile — they're already getting intensive round-robin
+drilling (see above), so folding them in here too would be redundant.
 
 ## Card presentation
 
@@ -113,6 +122,24 @@ which kind of card it is, instead of a text label. Whichever side is the
 answer is hidden behind a fixed, generic placeholder (not a CSS blur
 filter over the real text, which would still leak its length/shape) —
 you find out what's actually there by tapping "Show answer" like normal.
+Once revealed, the answer side gets a background tint distinct from the
+"given" side, so it's obvious at a glance which piece you were actually
+asked to produce.
+
+## Endings cards
+
+Some root senses point at a "self-explanatory" derived word instead of
+carrying their own definition — e.g. `ANERGY`'s noun sense ("lack of
+energy") also derives the adjective `ANERGIC`, whose meaning follows
+straightforwardly once you know `ANERGY` and doesn't need spelling out
+separately. Rather than leaving that pointer stuck inside the definition
+text, it gets its own **Endings** card, along with the root's
+conjugations/plurals and its `RE-`/`UN-`-prefixed form(s) (`READD`,
+`UNPALATABLE`, etc.), whichever of those exist and are valid Scrabble
+words. Endings cards share the word2def two-column layout (root word on
+the left) but carry an "Endings" label and, once revealed, a background
+color distinct from a definition's — since the answer expected is a list
+of forms, not a definition.
 
 ## Jumbles and anagram solutions
 
@@ -131,6 +158,15 @@ necessarily the word the card was built from, guessing any correct
 solution should count as getting it right. The card tells you upfront how
 many solutions exist, and "Show answer" lists all of them, each also in
 valuegram order.
+
+## Looking up a word
+
+The **?** button opens a lookup panel: type any word to see whether it's
+valid ("PHONY" if not), its root(s)' definition(s), and its
+conjugations/plurals. If every root the word resolves to is already in
+your deck, you'll also see your current quizzing stats for each of its
+cards (learning vs. reviewing, miss count); otherwise an **Add** button
+queues it — see "How word selection works" above.
 
 ## Installing as an app
 
@@ -228,8 +264,8 @@ it back up.
   - `js/dictionary.js` — fetches/parses `data/dictionary.json`, random
     word selection, root resolution, and the lazily-built anagram index
     behind `getAnagramSolutions()`.
-  - `js/cards.js` — builds flashcard specs (word↔definition, jumbles)
-    for a root word.
+  - `js/cards.js` — builds flashcard specs (word↔definition, endings,
+    jumbles) for a root word.
   - `js/jumble.js` — the custom-letter-order jumble function and
     `compareByValuegram()`, the sort it also powers.
   - `js/srs.js` — the spaced-repetition scheduler.
@@ -241,7 +277,7 @@ it back up.
   - `js/sync.js` — cloud backup/sync engine (push/pull against the
     worker, last-write-wins merge, retry-friendly).
   - `js/sync-ui.js` — the Cloud sync panel.
-  - `js/queue-ui.js` — the "Add word" panel.
+  - `js/lookup-ui.js` — the "?" word lookup panel.
   - `js/app.js` — UI wiring.
 - `manifest.webmanifest`, `sw.js`, `icons/` — PWA install manifest,
   service worker, and app icons.

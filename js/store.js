@@ -5,7 +5,7 @@
  * sync on top of this — see there for how remote merges happen.
  */
 
-import { pickRandomWord, resolveRoots, wordExists, wordCount } from './dictionary.js';
+import { pickRandomWord, resolveRoots, wordExists, wordCount, getRootSenses } from './dictionary.js';
 import { buildCardSpecs } from './cards.js';
 import { initialState, schedule, DEFAULT_EASE } from './srs.js';
 
@@ -103,6 +103,42 @@ export function queueWord(rawWord) {
   }
   save(KEY_PENDING_WORDS, pending);
   return { ok: true, word };
+}
+
+/** Everything the "look up a word" panel needs: whether it's a real word
+ * at all, its root(s) with their definitions/inflections, and — once
+ * every root it resolves to is already in your deck — your current
+ * quizzing stats for each of its cards. If any root isn't in your deck
+ * yet, `added` is false and the caller should offer to queue it (see
+ * queueWord) instead of showing stats. */
+export function getWordInfo(rawWord) {
+  const word = (rawWord || '').trim().toUpperCase();
+  if (!word || !/^[A-Z]+$/.test(word) || !wordExists(word)) {
+    return { word, exists: false };
+  }
+
+  const roots = resolveRoots(word);
+  const selectedSet = new Set(getSelected().map((s) => s.root_word));
+  const added = roots.length > 0 && roots.every((r) => selectedSet.has(r));
+
+  const rootInfo = roots.map((r) => {
+    const senses = getRootSenses(r) || [];
+    const inflections = new Set();
+    for (const s of senses) for (const form of s.inflections) inflections.add(form);
+    return {
+      root: r,
+      senses: senses.map((s) => ({ pos: s.pos, definition: s.definition })),
+      inflections: [...inflections],
+    };
+  });
+
+  const cards = added
+    ? getCards()
+        .filter((c) => !c.deleted && roots.includes(c.root_word))
+        .map((c) => ({ type: c.type, phase: c.phase, reps: c.reps, lapses: c.lapses }))
+    : [];
+
+  return { word, exists: true, added, roots: rootInfo, cards };
 }
 
 function consumePendingWords(words, nowIso) {
@@ -310,21 +346,22 @@ function pickWeightedByPriority(pool, nowMs) {
 }
 
 /** Grades a card and updates its SRS state. Also maintains the rolling
- * "recently missed" pile: a miss on *any* card (whether it's still in
- * intro drilling or already graduated) adds it, a subsequent correct
- * answer removes it again, and once the pile reaches MISTAKE_BATCH_SIZE
- * distinct cards they're all sent back into intensive intro drilling
- * together (same mechanism as a fresh batch of new words) and the pile
- * resets. Re-flagging a card that's already mid-intro is harmless — it
- * just resets its rep count, asking for two more correct answers before
- * it graduates instead of however many it needed before. Returns the
- * updated card and, when the batch just triggered, { cardCount }. */
+ * "recently missed" pile — but only for already-graduated ("review"-
+ * phase) cards. Intro-phase cards are deliberately excluded: they're
+ * already getting intensive round-robin drilling, so folding their
+ * misses into this pile too would be redundant. A miss on a review card
+ * adds it to the pile, a subsequent correct answer removes it again, and
+ * once the pile reaches MISTAKE_BATCH_SIZE distinct cards they're all
+ * sent back into intensive intro drilling together (same mechanism as a
+ * fresh batch of new words) and the pile resets. Returns the updated
+ * card and, when the batch just triggered, { cardCount }. */
 export function answerCard(id, correct) {
   const cards = getCards();
   const card = cards.find((c) => c.id === id);
   if (!card) return null;
   const now = new Date();
   const nowIso = now.toISOString();
+  const wasReview = card.phase === 'review';
 
   const next = schedule(
     { interval_days: card.interval_days, ease: card.ease, reps: card.reps, lapses: card.lapses },
@@ -337,26 +374,28 @@ export function answerCard(id, correct) {
   }
 
   let mistakeBatch = null;
-  let recentlyWrong = getRecentlyWrong();
-  if (correct) {
-    recentlyWrong = recentlyWrong.filter((x) => x !== id);
-  } else if (!recentlyWrong.includes(id)) {
-    recentlyWrong = [...recentlyWrong, id];
-  }
-  if (recentlyWrong.length >= MISTAKE_BATCH_SIZE) {
-    let cardCount = 0;
-    for (const wrongId of recentlyWrong) {
-      const c = cards.find((x) => x.id === wrongId);
-      if (!c) continue;
-      c.phase = 'intro';
-      c.reps = 0;
-      c.updated_at = nowIso;
-      cardCount++;
+  if (wasReview) {
+    let recentlyWrong = getRecentlyWrong();
+    if (correct) {
+      recentlyWrong = recentlyWrong.filter((x) => x !== id);
+    } else if (!recentlyWrong.includes(id)) {
+      recentlyWrong = [...recentlyWrong, id];
     }
-    mistakeBatch = { cardCount };
-    recentlyWrong = [];
+    if (recentlyWrong.length >= MISTAKE_BATCH_SIZE) {
+      let cardCount = 0;
+      for (const wrongId of recentlyWrong) {
+        const c = cards.find((x) => x.id === wrongId);
+        if (!c) continue;
+        c.phase = 'intro';
+        c.reps = 0;
+        c.updated_at = nowIso;
+        cardCount++;
+      }
+      mistakeBatch = { cardCount };
+      recentlyWrong = [];
+    }
+    save(KEY_RECENTLY_WRONG, recentlyWrong);
   }
-  save(KEY_RECENTLY_WRONG, recentlyWrong);
 
   save(KEY_CARDS, cards);
   return { card, mistakeBatch };

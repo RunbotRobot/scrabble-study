@@ -3,13 +3,14 @@ import { generateIntroBatch, getNextCard, answerCard, getStats } from './store.j
 import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
-import { initQueueUI } from './queue-ui.js';
+import { initLookupUI } from './lookup-ui.js';
 
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
 const studyCard = document.getElementById('study-card');
 const syncPanelEl = document.getElementById('sync-panel');
-const queuePanelEl = document.getElementById('queue-panel');
+const lookupBtnEl = document.getElementById('lookup-btn');
+const lookupModalEl = document.getElementById('lookup-modal-root');
 
 function refreshStats() {
   const stats = getStats();
@@ -28,11 +29,21 @@ function renderJumbleTiles(card) {
   return `<div class="jumble-tiles">${tiles}</div>`;
 }
 
-function jumbleTypeLine(card, introRemaining) {
-  const solutions = getAnagramSolutions(card.prompt);
-  const solutionNote = `${solutions.length} solution${solutions.length === 1 ? '' : 's'}`;
-  const introNote = card.phase === 'intro' ? `New (${introRemaining} left) · ` : '';
-  return `<div class="card-type">Jumble · ${introNote}${solutionNote}</div>`;
+/** The small label above a card, if any — only needed for card types that
+ * would otherwise be visually ambiguous (a jumble looks like a jumble
+ * regardless, but an endings card shares its layout with word2def, so it
+ * needs a label to tell you what kind of answer to prepare). */
+function typeLineFor(card, introRemaining) {
+  const introNote = card.phase === 'intro' ? `New (${introRemaining} left)` : '';
+  if (card.type === 'jumble') {
+    const solutions = getAnagramSolutions(card.prompt);
+    const solutionNote = `${solutions.length} solution${solutions.length === 1 ? '' : 's'}`;
+    return `<div class="card-type">${['Jumble', introNote, solutionNote].filter(Boolean).join(' · ')}</div>`;
+  }
+  if (card.type === 'endings') {
+    return `<div class="card-type">${['Endings', introNote].filter(Boolean).join(' · ')}</div>`;
+  }
+  return '';
 }
 
 /** A fixed, content-independent placeholder standing in for a hidden
@@ -56,8 +67,14 @@ function renderWordDefCard(card, revealed) {
   const wordGiven = card.type === 'word2def';
   const word = wordGiven ? card.prompt : card.answer;
   const definition = wordGiven ? card.answer : card.prompt;
-  const wordContent = revealed || wordGiven ? `<div class="wd-content">${word}</div>` : blurBlock('word');
-  const defContent = revealed || !wordGiven ? `<div class="wd-content">${definition}</div>` : blurBlock('definition');
+  const wordHighlight = revealed && !wordGiven ? ' answer-highlight' : '';
+  const defHighlight = revealed && wordGiven ? ' answer-highlight' : '';
+  const wordContent =
+    revealed || wordGiven ? `<div class="wd-content${wordHighlight}">${word}</div>` : blurBlock('word');
+  const defContent =
+    revealed || !wordGiven
+      ? `<div class="wd-content wd-definition${defHighlight}">${definition}</div>`
+      : blurBlock('definition');
   return `
     <div class="word-def-row">
       <div class="wd-slot">
@@ -72,6 +89,40 @@ function renderWordDefCard(card, revealed) {
   `;
 }
 
+/** An endings card shares its two-column layout with word2def (word on
+ * the left, its answer on the right), but the answer is the root's
+ * conjugations/plurals, self-explanatory derived forms, and RE-/UN-
+ * forms — not a definition — so its revealed background gets its own
+ * color (see typeLineFor for the label that distinguishes it before
+ * reveal, when the layout alone can't). */
+function renderEndingsCard(card, revealed) {
+  const answerContent = revealed
+    ? `<div class="wd-content answer-highlight-endings">${card.answer}</div>`
+    : blurBlock('definition');
+  return `
+    <div class="word-def-row">
+      <div class="wd-slot">
+        <div class="wd-label">Word</div>
+        <div class="wd-content">${card.prompt}</div>
+      </div>
+      <div class="wd-slot">
+        <div class="wd-label">Endings</div>
+        ${answerContent}
+      </div>
+    </div>
+  `;
+}
+
+function renderCardBody(card, revealed) {
+  if (card.type === 'jumble') {
+    return revealed
+      ? `${renderJumbleTiles(card)}<div class="card-answer answer-highlight">${getAnagramSolutions(card.prompt).join(', ')}</div>`
+      : renderJumbleTiles(card);
+  }
+  if (card.type === 'endings') return renderEndingsCard(card, revealed);
+  return renderWordDefCard(card, revealed);
+}
+
 let currentCard = null;
 let currentIntroRemaining = 0;
 
@@ -84,11 +135,9 @@ function loadNextCard() {
   }
   currentCard = card;
   currentIntroRemaining = introRemaining;
-  const isJumble = card.type === 'jumble';
-  const typeLine = isJumble ? jumbleTypeLine(card, introRemaining) : '';
   studyCard.innerHTML = `
-    ${typeLine}
-    ${isJumble ? renderJumbleTiles(card) : renderWordDefCard(card, false)}
+    ${typeLineFor(card, introRemaining)}
+    ${renderCardBody(card, false)}
     <button id="show-answer-btn" class="secondary">Show answer</button>
   `;
   document.getElementById('show-answer-btn').addEventListener('click', showAnswer);
@@ -96,14 +145,9 @@ function loadNextCard() {
 
 function showAnswer() {
   if (!currentCard) return;
-  const isJumble = currentCard.type === 'jumble';
-  const typeLine = isJumble ? jumbleTypeLine(currentCard, currentIntroRemaining) : '';
-  const body = isJumble
-    ? `${renderJumbleTiles(currentCard)}<div class="card-answer">${getAnagramSolutions(currentCard.prompt).join(', ')}</div>`
-    : renderWordDefCard(currentCard, true);
   studyCard.innerHTML = `
-    ${typeLine}
-    ${body}
+    ${typeLineFor(currentCard, currentIntroRemaining)}
+    ${renderCardBody(currentCard, true)}
     <div class="card-actions">
       <button class="grade-incorrect">Got it wrong</button>
       <button class="grade-correct">Got it right</button>
@@ -131,14 +175,12 @@ function grade(correct) {
 
   refreshStats();
   loadNextCard();
-  if (milestoneHit) initQueueUI(queuePanelEl); // reflect any queued words the batch just consumed
   scheduleSync();
 }
 
-// With no manual "add a word" button, a brand-new install has zero cards
-// and no streak yet to trigger generating any — so if it's still empty
-// after we've had a chance to pull down any existing cloud data, seed a
-// first batch automatically.
+// A brand-new install has zero cards and no streak yet to trigger
+// generating any — so if it's still empty after we've had a chance to
+// pull down any existing cloud data, seed a first batch automatically.
 function bootstrapIfEmpty() {
   if (getStats().totalCards > 0) return;
   const result = generateIntroBatch(MILESTONE_EVERY);
@@ -149,7 +191,6 @@ function bootstrapIfEmpty() {
   }
   refreshStats();
   loadNextCard();
-  initQueueUI(queuePanelEl);
   scheduleSync();
 }
 
@@ -164,7 +205,7 @@ function bootstrapIfEmpty() {
   refreshStats();
   loadNextCard();
   initSyncUI(syncPanelEl);
-  initQueueUI(queuePanelEl);
+  initLookupUI(lookupBtnEl, lookupModalEl);
   startBackgroundSync();
 
   let didBootstrapCheck = false;
@@ -189,7 +230,6 @@ function bootstrapIfEmpty() {
     if (wasSyncing && status.state !== 'syncing') {
       refreshStats();
       if (!currentCard) loadNextCard();
-      initQueueUI(queuePanelEl);
       maybeBootstrap();
     }
     wasSyncing = status.state === 'syncing';

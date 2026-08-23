@@ -29,10 +29,28 @@ header {
   margin: 0 auto;
 }
 
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 h1 {
-  margin: 0 0 0.75rem;
+  margin: 0;
   font-size: 1.6rem;
   letter-spacing: 0.02em;
+}
+
+.lookup-btn {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 h2 {
@@ -167,6 +185,36 @@ button.secondary {
   font-size: 1.05rem;
   font-weight: 600;
   overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Definitions (and endings lists) run much longer than the short root
+   words in the Word column, so they get a smaller size to keep long
+   entries — e.g. "protoplasmic" showing up inside a definition — from
+   overflowing their column on a phone screen. */
+.wd-definition {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Marks whichever side of a card was the hidden answer, once revealed —
+   so it's visually obvious which piece you were asked to produce and
+   which was given. */
+.answer-highlight {
+  background: var(--tile);
+  border: 1px solid var(--tile-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+}
+
+/* Endings answers get their own color so you know at a glance — before
+   you've even read it — that you're looking at conjugations/derived
+   forms, not a definition. */
+.answer-highlight-endings {
+  background: #dce8e0;
+  border: 1px solid #b9d0c2;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
 }
 
 .blur-block {
@@ -262,13 +310,40 @@ button.grade-incorrect { background: var(--bad); }
   font-size: 0.9rem;
 }
 
-.queue-form {
+.lookup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(43, 38, 32, 0.5);
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 1rem;
+  z-index: 10;
+  overflow-y: auto;
 }
 
-.queue-form input {
+.lookup-dialog {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 1.25rem;
+  width: 100%;
+  max-width: 480px;
+}
+
+.lookup-top {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.lookup-form {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.lookup-form input {
   flex: 1;
   min-width: 0;
   padding: 0.55rem 0.7rem;
@@ -279,32 +354,75 @@ button.grade-incorrect { background: var(--bad); }
   text-transform: uppercase;
 }
 
-.queue-message {
+.lookup-body {
+  margin-top: 1rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.lookup-root + .lookup-root {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.lookup-root-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 0.25rem;
+}
+
+.lookup-definition {
+  font-size: 0.9rem;
+}
+
+.lookup-inflections {
   font-size: 0.85rem;
   color: var(--muted);
-  margin: 0.6rem 0 0;
+  margin-top: 0.35rem;
 }
 
-.queue-message:empty { display: none; }
-.queue-message.queue-error { color: var(--bad); }
+.lookup-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  margin-right: 0.3rem;
+}
 
-.queue-list {
-  list-style: none;
-  margin: 0.75rem 0 0;
-  padding: 0;
+.lookup-phony {
+  font-weight: 600;
+  color: var(--bad);
+}
+
+.lookup-stats {
+  margin-top: 1rem;
+}
+
+.lookup-stat-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.4rem;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.85rem;
 }
 
-.queue-list li {
+.lookup-stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.25rem 0.55rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.lookup-muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.lookup-message {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0.6rem 0 0;
 }
 
 .sync-error {

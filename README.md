@@ -31,10 +31,11 @@ Each time a batch is generated:
    - **Endings** — also only for roots 8 letters or shorter; see "Endings
      cards" below.
    - **Jumble** — one per distinct conjugated/pluralized form of the
-     root that's 8 letters or shorter, with the letters arranged in the
+     root that's 8 letters or shorter, plus one for the root word itself
+     (also if 8 letters or shorter), with the letters arranged in the
      fixed custom order `QVUWGBFJYOPLKITMDCNHARZXES` (deterministic, not
      a random shuffle) — see "Jumbles and anagram solutions" below.
-     Longer inflected forms don't get a jumble card.
+     Longer forms don't get a jumble card.
    - A root with no dictionary definition on file (some newer Scrabble
      words only have a part of speech, no gloss) only gets jumble cards
      (plus an endings card, if it has conjugations/plurals or the like).
@@ -142,10 +143,12 @@ separately. Rather than leaving that pointer stuck inside the definition
 text, it gets its own **Endings** card, along with the root's
 conjugations/plurals and its `RE-`/`UN-`-prefixed form(s) (`READD`,
 `UNPALATABLE`, etc.), whichever of those exist and are valid Scrabble
-words. Endings cards share the word2def two-column layout (root word on
-the left) but carry an "Endings" label and, once revealed, a background
-color distinct from a definition's — since the answer expected is a list
-of forms, not a definition.
+words. Verb conjugations are listed `-ED, -ING, -S` — e.g. `PREVISED,
+PREVISING, PREVISES` — rather than alphabetically. Endings cards share
+the word2def two-column layout (root word on the left) but carry an
+"Endings" label and a background color distinct from a definition's,
+visible even before "Show answer" so it reads as an endings card at a
+glance rather than looking like a word2def card until you flip it.
 
 ## Jumbles and anagram solutions
 

@@ -8,11 +8,22 @@ const MAX_JUMBLE_LENGTH = 8;
  * letters. */
 const MAX_DEFINITION_ROOT_LENGTH = 8;
 
+/** Sorts inflected forms so verb conjugations read in the natural order
+ * -ED, -ING, then everything else (typically the -S form, plus any
+ * irregular forms a regular suffix check can't classify) — rather than
+ * whatever order the source data or alphabetization happens to produce.
+ * Stable, so forms within the same group keep their relative order. */
+function inflectionRank(form) {
+  if (form.endsWith('ED')) return 0;
+  if (form.endsWith('ING')) return 1;
+  return 2;
+}
+
 /** Builds the flashcard specs for a root word: a word->definition card,
  * a definition->word card, an endings card (all three only for roots up
  * to MAX_DEFINITION_ROOT_LENGTH letters), and one jumble card per
- * distinct conjugated/pluralized form (up to MAX_JUMBLE_LENGTH letters)
- * listed across all of the root's senses.
+ * distinct conjugated/pluralized form plus the root word itself (each up
+ * to MAX_JUMBLE_LENGTH letters) listed across all of the root's senses.
  *
  * The endings card quizzes everything about the root *besides* its core
  * meaning: its conjugations/plurals, any "self-explanatory" derived
@@ -29,10 +40,11 @@ export function buildCardSpecs(rootWord) {
   const definedSenses = senses.filter((s) => s.definition);
   const definitionText = definedSenses.map((s) => s.definition).join(' / ');
 
-  const inflections = new Set();
+  const inflectionSet = new Set();
   for (const s of senses) {
-    for (const form of s.inflections) inflections.add(form);
+    for (const form of s.inflections) inflectionSet.add(form);
   }
+  const inflections = [...inflectionSet].sort((a, b) => inflectionRank(a) - inflectionRank(b));
 
   const derivedForms = [];
   const seenDerived = new Set();
@@ -52,7 +64,7 @@ export function buildCardSpecs(rootWord) {
       specs.push({ type: 'word2def', prompt: rootWord, answer: definitionText });
       specs.push({ type: 'def2word', prompt: definitionText, answer: rootWord });
     }
-    if (inflections.size > 0 || derivedForms.length > 0 || prefixForms.length > 0) {
+    if (inflections.length > 0 || derivedForms.length > 0 || prefixForms.length > 0) {
       const endingsAnswer = [
         ...inflections,
         ...derivedForms.map((d) => `${d.word} (${d.pos})`),
@@ -61,7 +73,9 @@ export function buildCardSpecs(rootWord) {
       specs.push({ type: 'endings', prompt: rootWord, answer: endingsAnswer });
     }
   }
-  for (const form of inflections) {
+  const jumbleForms = new Set(inflections);
+  jumbleForms.add(rootWord);
+  for (const form of jumbleForms) {
     if (form.length > MAX_JUMBLE_LENGTH) continue;
     specs.push({ type: 'jumble', prompt: jumble(form), answer: form });
   }

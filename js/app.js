@@ -108,13 +108,14 @@ function renderWordDefCard(card, revealed) {
 /** An endings card shares its two-column layout with word2def (word on
  * the left, its answer on the right), but the answer is the root's
  * conjugations/plurals, self-explanatory derived forms, and RE-/UN-
- * forms — not a definition — so its revealed background gets its own
- * color (see typeLineFor for the label that distinguishes it before
- * reveal, when the layout alone can't). */
+ * forms — not a definition — so its background gets its own color,
+ * visible even before "Show answer" (not just once revealed), so the
+ * card reads as "an endings card" at a glance instead of looking like a
+ * word2def card until you flip it. */
 function renderEndingsCard(card, revealed) {
   const answerContent = revealed
-    ? `<div class="wd-content answer-highlight-endings">${card.answer}</div>`
-    : blurBlock('definition');
+    ? `<div class="wd-content wd-definition answer-highlight-endings">${card.answer}</div>`
+    : `<div class="answer-highlight-endings">${blurBlock('definition')}</div>`;
   return `
     <div class="word-def-row">
       <div class="wd-slot">

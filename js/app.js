@@ -1,13 +1,15 @@
-import { loadDictionary } from './dictionary.js';
+import { loadDictionary, getAnagramSolutions } from './dictionary.js';
 import { generateIntroBatch, getNextCard, answerCard, getStats } from './store.js';
 import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
+import { initQueueUI } from './queue-ui.js';
 
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
 const studyCard = document.getElementById('study-card');
 const syncPanelEl = document.getElementById('sync-panel');
+const queuePanelEl = document.getElementById('queue-panel');
 
 function refreshStats() {
   const stats = getStats();
@@ -16,6 +18,7 @@ function refreshStats() {
     <div><dt>Total cards</dt><dd>${stats.totalCards.toLocaleString()}</dd></div>
     ${stats.introducing > 0 ? `<div><dt>Introducing</dt><dd>${stats.introducing.toLocaleString()}</dd></div>` : ''}
     ${stats.recentlyWrong > 0 ? `<div><dt>Recently wrong</dt><dd>${stats.recentlyWrong.toLocaleString()}/50</dd></div>` : ''}
+    ${stats.queuedWords > 0 ? `<div><dt>Queued</dt><dd>${stats.queuedWords.toLocaleString()}</dd></div>` : ''}
     <div><dt>Streak</dt><dd>${getStreak().toLocaleString()}</dd></div>
   `;
 }
@@ -23,6 +26,13 @@ function refreshStats() {
 function renderJumbleTiles(card) {
   const tiles = [...card.prompt].map((ch) => `<span class="tile">${ch}</span>`).join('');
   return `<div class="jumble-tiles">${tiles}</div>`;
+}
+
+function jumbleTypeLine(card, introRemaining) {
+  const solutions = getAnagramSolutions(card.prompt);
+  const solutionNote = `${solutions.length} solution${solutions.length === 1 ? '' : 's'}`;
+  const introNote = card.phase === 'intro' ? `New (${introRemaining} left) · ` : '';
+  return `<div class="card-type">Jumble · ${introNote}${solutionNote}</div>`;
 }
 
 /** A fixed, content-independent placeholder standing in for a hidden
@@ -63,6 +73,7 @@ function renderWordDefCard(card, revealed) {
 }
 
 let currentCard = null;
+let currentIntroRemaining = 0;
 
 function loadNextCard() {
   const { card, introRemaining } = getNextCard();
@@ -72,10 +83,9 @@ function loadNextCard() {
     return;
   }
   currentCard = card;
+  currentIntroRemaining = introRemaining;
   const isJumble = card.type === 'jumble';
-  const typeLine = isJumble
-    ? `<div class="card-type">${card.phase === 'intro' ? `Jumble · New (${introRemaining} left)` : 'Jumble'}</div>`
-    : '';
+  const typeLine = isJumble ? jumbleTypeLine(card, introRemaining) : '';
   studyCard.innerHTML = `
     ${typeLine}
     ${isJumble ? renderJumbleTiles(card) : renderWordDefCard(card, false)}
@@ -87,11 +97,9 @@ function loadNextCard() {
 function showAnswer() {
   if (!currentCard) return;
   const isJumble = currentCard.type === 'jumble';
-  const typeLine = isJumble
-    ? `<div class="card-type">${currentCard.phase === 'intro' ? 'Jumble · New' : 'Jumble'}</div>`
-    : '';
+  const typeLine = isJumble ? jumbleTypeLine(currentCard, currentIntroRemaining) : '';
   const body = isJumble
-    ? `${renderJumbleTiles(currentCard)}<div class="card-answer">${currentCard.answer}</div>`
+    ? `${renderJumbleTiles(currentCard)}<div class="card-answer">${getAnagramSolutions(currentCard.prompt).join(', ')}</div>`
     : renderWordDefCard(currentCard, true);
   studyCard.innerHTML = `
     ${typeLine}
@@ -123,6 +131,7 @@ function grade(correct) {
 
   refreshStats();
   loadNextCard();
+  if (milestoneHit) initQueueUI(queuePanelEl); // reflect any queued words the batch just consumed
   scheduleSync();
 }
 
@@ -140,6 +149,7 @@ function bootstrapIfEmpty() {
   }
   refreshStats();
   loadNextCard();
+  initQueueUI(queuePanelEl);
   scheduleSync();
 }
 
@@ -154,6 +164,7 @@ function bootstrapIfEmpty() {
   refreshStats();
   loadNextCard();
   initSyncUI(syncPanelEl);
+  initQueueUI(queuePanelEl);
   startBackgroundSync();
 
   let didBootstrapCheck = false;
@@ -178,6 +189,7 @@ function bootstrapIfEmpty() {
     if (wasSyncing && status.state !== 'syncing') {
       refreshStats();
       if (!currentCard) loadNextCard();
+      initQueueUI(queuePanelEl);
       maybeBootstrap();
     }
     wasSyncing = status.state === 'syncing';

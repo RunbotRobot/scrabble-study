@@ -5,13 +5,14 @@
  * sync on top of this — see there for how remote merges happen.
  */
 
-import { pickRandomWord, resolveRoots, wordCount } from './dictionary.js';
+import { pickRandomWord, resolveRoots, wordExists, wordCount } from './dictionary.js';
 import { buildCardSpecs } from './cards.js';
 import { initialState, schedule, DEFAULT_EASE } from './srs.js';
 
 const KEY_SELECTED = 'scrabbleStudy.selectedWords';
 const KEY_CARDS = 'scrabbleStudy.cards';
 const KEY_RECENTLY_WRONG = 'scrabbleStudy.recentlyWrong';
+const KEY_PENDING_WORDS = 'scrabbleStudy.pendingWords';
 
 const MAX_PICK_ATTEMPTS = 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -57,6 +58,66 @@ function getRecentlyWrong() {
   return load(KEY_RECENTLY_WRONG, []);
 }
 
+function getAllPendingWords() {
+  return load(KEY_PENDING_WORDS, []);
+}
+
+/** Queued words, oldest-first — the order generateIntroBatch will
+ * consume them in. */
+export function getPendingWords() {
+  return getAllPendingWords()
+    .filter((p) => !p.deleted)
+    .sort((a, b) => (a.added_at < b.added_at ? -1 : a.added_at > b.added_at ? 1 : 0));
+}
+
+/** Queues a word to be resolved to its root(s) and added — ahead of any
+ * random picks — the next time a batch is generated (a streak milestone,
+ * a mistake batch, or the empty-state bootstrap). Validates against the
+ * dictionary immediately so a typo is caught right away rather than
+ * silently going nowhere later. */
+export function queueWord(rawWord) {
+  const word = (rawWord || '').trim().toUpperCase();
+  if (!word) return { ok: false, message: 'Enter a word.' };
+  if (!/^[A-Z]+$/.test(word)) return { ok: false, message: 'Letters only.' };
+  if (!wordExists(word)) return { ok: false, message: `"${word}" isn't in the Scrabble dictionary.` };
+
+  const selectedSet = new Set(getSelected().map((s) => s.root_word));
+  const roots = resolveRoots(word);
+  if (roots.every((r) => selectedSet.has(r))) {
+    return { ok: false, message: `${word} is already in your deck.` };
+  }
+
+  const pending = getAllPendingWords();
+  if (pending.some((p) => p.word === word && !p.deleted)) {
+    return { ok: false, message: `${word} is already queued.` };
+  }
+
+  const nowIso = new Date().toISOString();
+  const existingTombstone = pending.find((p) => p.word === word);
+  if (existingTombstone) {
+    existingTombstone.deleted = 0;
+    existingTombstone.added_at = nowIso;
+    existingTombstone.updated_at = nowIso;
+  } else {
+    pending.push({ word, added_at: nowIso, updated_at: nowIso, deleted: 0 });
+  }
+  save(KEY_PENDING_WORDS, pending);
+  return { ok: true, word };
+}
+
+function consumePendingWords(words, nowIso) {
+  if (words.length === 0) return;
+  const consumed = new Set(words);
+  const all = getAllPendingWords();
+  for (const p of all) {
+    if (consumed.has(p.word) && !p.deleted) {
+      p.deleted = 1;
+      p.updated_at = nowIso;
+    }
+  }
+  save(KEY_PENDING_WORDS, all);
+}
+
 /** A card's identity is fully determined by what it's made of (root word,
  * kind, and prompt), not by when/where it was created — so two devices
  * that independently build "the same" card always agree on its id. This
@@ -95,51 +156,72 @@ function addRootToStudy(rootWord, viaWord, now, phase, selected, cards) {
   return specs.length;
 }
 
-/** Picks a uniformly-random word from the whole dictionary (root,
- * conjugated, or plural forms all equally likely), resolves it to its
- * root(s), and adds any not-yet-studied root(s) — with their flashcards —
- * to `selected`/`cards` (mutated in place). Returns how many cards were
- * added, or 0 if the dictionary is exhausted of new words. */
-function addOneNewRootBatch(now, phase, selected, selectedSet, cards) {
+/** Picks a uniformly-random word from the whole dictionary that still
+ * resolves to at least one not-yet-studied root. Returns null if the
+ * dictionary is exhausted of new words. */
+function pickRandomNewWord(selectedSet) {
   for (let attempt = 0; attempt < MAX_PICK_ATTEMPTS; attempt++) {
     const word = pickRandomWord();
     const roots = resolveRoots(word);
-    const newRoots = roots.filter((r) => !selectedSet.has(r));
-    if (newRoots.length === 0) continue;
-
-    let cardsAdded = 0;
-    for (const root of newRoots) {
-      cardsAdded += addRootToStudy(root, word, now, phase, selected, cards);
-      selectedSet.add(root);
-    }
-    return { pickedWord: word, roots, newRoots, cardsAdded };
+    if (roots.some((r) => !selectedSet.has(r))) return word;
   }
   return null;
 }
 
+/** Resolves `word` to its root(s), and adds any not-yet-studied root(s)
+ * — with their flashcards — to `selected`/`cards` (mutated in place).
+ * Returns how many cards and roots were newly added (both 0 if every
+ * root `word` resolves to was already studied). */
+function addWordToStudy(word, now, phase, selected, selectedSet, cards) {
+  const roots = resolveRoots(word);
+  const newRoots = roots.filter((r) => !selectedSet.has(r));
+  let cardsAdded = 0;
+  for (const root of newRoots) {
+    cardsAdded += addRootToStudy(root, word, now, phase, selected, cards);
+    selectedSet.add(root);
+  }
+  return { newRoots, cardsAdded };
+}
+
 /** Generates a fresh batch of at least `minCards` new flashcards (tagged
- * for intensive "intro" drilling — see getNextCard) by repeatedly picking
- * random words and building out their roots. Since a single root can
- * produce several cards, `minCards` is a floor, not a ceiling: the batch
- * always finishes out the root it's partway through rather than cutting
- * a root's cards off mid-way. */
+ * for intensive "intro" drilling — see getNextCard). Words you've
+ * explicitly queued (see queueWord) are used first, oldest-queued first,
+ * ahead of random picks — only once the queue is empty does it fall back
+ * to picking randomly. Since a single root can produce several cards,
+ * `minCards` is a floor, not a ceiling: the batch always finishes out
+ * the root/word it's partway through rather than cutting it off mid-way. */
 export function generateIntroBatch(minCards = 50) {
   const now = new Date();
+  const nowIso = now.toISOString();
   const selected = getSelected();
   const selectedSet = new Set(selected.map((s) => s.root_word));
   const cards = getCards();
+  const pending = getPendingWords();
 
   let cardsAdded = 0;
   let wordsAdded = 0;
   const roots = [];
+  let pendingIndex = 0;
+  const consumedPendingWords = [];
+
   while (cardsAdded < minCards) {
-    const result = addOneNewRootBatch(now, 'intro', selected, selectedSet, cards);
-    if (!result) break; // dictionary exhausted of unstudied words
+    let word;
+    if (pendingIndex < pending.length) {
+      word = pending[pendingIndex].word;
+      consumedPendingWords.push(word);
+      pendingIndex++;
+    } else {
+      word = pickRandomNewWord(selectedSet);
+      if (word === null) break; // dictionary exhausted of unstudied words
+    }
+
+    const result = addWordToStudy(word, now, 'intro', selected, selectedSet, cards);
     cardsAdded += result.cardsAdded;
     wordsAdded += result.newRoots.length;
     roots.push(...result.newRoots);
   }
 
+  consumePendingWords(consumedPendingWords, nowIso);
   save(KEY_SELECTED, selected);
   save(KEY_CARDS, cards);
   return { ok: cardsAdded > 0, cardsAdded, wordsAdded, roots };
@@ -227,20 +309,22 @@ function pickWeightedByPriority(pool, nowMs) {
   return pool[pool.length - 1];
 }
 
-/** Grades a card and updates its SRS state. For a graduated ("review"-
- * phase) card, also maintains the rolling "recently missed" pile: a miss
- * adds it, a subsequent correct answer removes it again, and once the
- * pile reaches MISTAKE_BATCH_SIZE distinct cards they're all sent back
- * into intensive intro drilling together (same mechanism as a fresh
- * batch of new words) and the pile resets. Returns the updated card and,
- * on the batch just triggering, { cardCount }. */
+/** Grades a card and updates its SRS state. Also maintains the rolling
+ * "recently missed" pile: a miss on *any* card (whether it's still in
+ * intro drilling or already graduated) adds it, a subsequent correct
+ * answer removes it again, and once the pile reaches MISTAKE_BATCH_SIZE
+ * distinct cards they're all sent back into intensive intro drilling
+ * together (same mechanism as a fresh batch of new words) and the pile
+ * resets. Re-flagging a card that's already mid-intro is harmless — it
+ * just resets its rep count, asking for two more correct answers before
+ * it graduates instead of however many it needed before. Returns the
+ * updated card and, when the batch just triggered, { cardCount }. */
 export function answerCard(id, correct) {
   const cards = getCards();
   const card = cards.find((c) => c.id === id);
   if (!card) return null;
   const now = new Date();
   const nowIso = now.toISOString();
-  const wasReview = card.phase === 'review';
 
   const next = schedule(
     { interval_days: card.interval_days, ease: card.ease, reps: card.reps, lapses: card.lapses },
@@ -253,28 +337,26 @@ export function answerCard(id, correct) {
   }
 
   let mistakeBatch = null;
-  if (wasReview) {
-    let recentlyWrong = getRecentlyWrong();
-    if (correct) {
-      recentlyWrong = recentlyWrong.filter((x) => x !== id);
-    } else if (!recentlyWrong.includes(id)) {
-      recentlyWrong = [...recentlyWrong, id];
-    }
-    if (recentlyWrong.length >= MISTAKE_BATCH_SIZE) {
-      let cardCount = 0;
-      for (const wrongId of recentlyWrong) {
-        const c = cards.find((x) => x.id === wrongId);
-        if (!c) continue;
-        c.phase = 'intro';
-        c.reps = 0;
-        c.updated_at = nowIso;
-        cardCount++;
-      }
-      mistakeBatch = { cardCount };
-      recentlyWrong = [];
-    }
-    save(KEY_RECENTLY_WRONG, recentlyWrong);
+  let recentlyWrong = getRecentlyWrong();
+  if (correct) {
+    recentlyWrong = recentlyWrong.filter((x) => x !== id);
+  } else if (!recentlyWrong.includes(id)) {
+    recentlyWrong = [...recentlyWrong, id];
   }
+  if (recentlyWrong.length >= MISTAKE_BATCH_SIZE) {
+    let cardCount = 0;
+    for (const wrongId of recentlyWrong) {
+      const c = cards.find((x) => x.id === wrongId);
+      if (!c) continue;
+      c.phase = 'intro';
+      c.reps = 0;
+      c.updated_at = nowIso;
+      cardCount++;
+    }
+    mistakeBatch = { cardCount };
+    recentlyWrong = [];
+  }
+  save(KEY_RECENTLY_WRONG, recentlyWrong);
 
   save(KEY_CARDS, cards);
   return { card, mistakeBatch };
@@ -290,6 +372,7 @@ export function getStats() {
     totalCards: cards.length,
     introducing: cards.filter((c) => c.phase === 'intro').length,
     recentlyWrong: getRecentlyWrong().length,
+    queuedWords: getPendingWords().length,
     cardsByType: byType,
   };
 }
@@ -301,16 +384,18 @@ export function getStats() {
 export function getChangedSince(since) {
   const selected = getSelected();
   const cards = getCards();
+  const pendingWords = getAllPendingWords();
   return {
     selectedWords: since ? selected.filter((r) => r.updated_at > since) : selected,
     cards: since ? cards.filter((r) => r.updated_at > since) : cards,
+    pendingWords: since ? pendingWords.filter((r) => r.updated_at > since) : pendingWords,
   };
 }
 
 /** Merges rows pulled from the server into local storage. Last-write-wins
  * by `updated_at`, keyed by each table's natural identity — so applying
  * the same remote rows twice (e.g. after a retried push) is always safe. */
-export function mergeRemote({ selectedWords = [], cards = [] }) {
+export function mergeRemote({ selectedWords = [], cards = [], pendingWords = [] }) {
   const selected = getSelected();
   const selectedByKey = new Map(selected.map((r) => [r.root_word, r]));
   for (const remote of selectedWords) {
@@ -330,4 +415,14 @@ export function mergeRemote({ selectedWords = [], cards = [] }) {
     }
   }
   save(KEY_CARDS, [...cardsByKey.values()]);
+
+  const localPending = getAllPendingWords();
+  const pendingByKey = new Map(localPending.map((r) => [r.word, r]));
+  for (const remote of pendingWords) {
+    const existing = pendingByKey.get(remote.word);
+    if (!existing || remote.updated_at > existing.updated_at) {
+      pendingByKey.set(remote.word, remote);
+    }
+  }
+  save(KEY_PENDING_WORDS, [...pendingByKey.values()]);
 }

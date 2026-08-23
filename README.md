@@ -7,13 +7,16 @@ via GitHub Pages at **https://runbotrobot.github.io/scrabble-study/**.
 
 ## How word selection works
 
-There's no manual "add a word" button — new words arrive automatically,
-tied to a 50-answer correct streak (see below). Each time a batch is
-generated:
+New words arrive automatically, tied to a 50-answer correct streak (see
+below). You can also queue specific words yourself with the **Add word**
+button — type a word and it joins a queue (oldest first) that's drained
+before any random picks the next time a batch is generated, so words you
+ask for show up in the very next batch. Each time a batch is generated:
 
-1. A word is picked from the *entire* word list — root, conjugated, or
-   plural form — with uniform probability. No weighting toward common,
-   "useful," or alphabetically-early words.
+1. A word is picked — from your queue if it has anything waiting,
+   otherwise at random from the *entire* word list (root, conjugated, or
+   plural form, with uniform probability — no weighting toward common,
+   "useful," or alphabetically-early words).
 2. That word is resolved to its dictionary root(s). Most words resolve to
    exactly one root (e.g. `WENT` → `GO`), but some resolve to more than
    one root because they're independently meaningful under different
@@ -26,7 +29,8 @@ generated:
    - **Jumble** — one per distinct conjugated/pluralized form of the
      root that's 8 letters or shorter, with the letters arranged in the
      fixed custom order `QVUWGBFJYOPLKITMDCNHARZXES` (deterministic, not
-     a random shuffle). Longer inflected forms don't get a jumble card.
+     a random shuffle) — see "Jumbles and anagram solutions" below.
+     Longer inflected forms don't get a jumble card.
    - A root with no dictionary definition on file (some newer Scrabble
      words only have a part of speech, no gloss) only gets jumble cards.
      A root longer than 8 letters with no short inflections either ends
@@ -94,11 +98,11 @@ fully locked out.
 
 ## Tracking recent mistakes
 
-Missing a graduated card adds it to a running "recently missed" pile;
-getting it right again removes it. Once that pile reaches 50 distinct
-cards, all 50 go back into intensive intro drilling together (the exact
-same mechanism as a fresh batch of new words), and the pile resets to
-build up again from there.
+Missing a card — intro or graduated, any card at all — adds it to a
+running "recently missed" pile; getting it right again removes it. Once
+that pile reaches 50 distinct cards, all 50 go back into intensive intro
+drilling together (the exact same mechanism as a fresh batch of new
+words), and the pile resets to build up again from there.
 
 ## Card presentation
 
@@ -109,6 +113,31 @@ which kind of card it is, instead of a text label. Whichever side is the
 answer is hidden behind a fixed, generic placeholder (not a CSS blur
 filter over the real text, which would still leak its length/shape) —
 you find out what's actually there by tapping "Show answer" like normal.
+
+## Jumbles and anagram solutions
+
+A jumble's letters are always shown in a fixed custom order — dubbed a
+**valuegram**, after the "alphagram" terminology from competitive
+Scrabble study — rather than alphabetically or shuffled randomly:
+`QVUWGBFJYOPLKITMDCNHARZXES`. That order isn't arbitrary; it runs from
+the tiles most valuable to hold (rarest/highest-scoring, like Q and V)
+down to the least (most common, like E and S), by true relative Scrabble
+value rather than the point value printed on the tile.
+
+Some jumbles have more than one valid solution — anagrams of each other
+that are both real dictionary words (e.g. `BOITNARE` solves to both
+`BARITONE` and `REOBTAIN`, among others). Since only one of them was
+necessarily the word the card was built from, guessing any correct
+solution should count as getting it right. The card tells you upfront how
+many solutions exist, and "Show answer" lists all of them, each also in
+valuegram order.
+
+## Installing as an app
+
+The site is a PWA — on a phone, use your browser's "Add to Home Screen" /
+"Install app" option to get it as a standalone app icon, launching without
+browser chrome. A service worker caches the app shell and dictionary data
+on first visit, so it keeps working offline after that.
 
 ## Spaced repetition
 
@@ -197,20 +226,25 @@ it back up.
 - `index.html`, `style.css`, `js/` — the static site (ES modules, no
   bundler, no framework).
   - `js/dictionary.js` — fetches/parses `data/dictionary.json`, random
-    word selection, root resolution.
+    word selection, root resolution, and the lazily-built anagram index
+    behind `getAnagramSolutions()`.
   - `js/cards.js` — builds flashcard specs (word↔definition, jumbles)
     for a root word.
-  - `js/jumble.js` — the custom-letter-order jumble function.
+  - `js/jumble.js` — the custom-letter-order jumble function and
+    `compareByValuegram()`, the sort it also powers.
   - `js/srs.js` — the spaced-repetition scheduler.
   - `js/streak.js` — tracks the consecutive-correct streak and its
     every-50 milestones.
-  - `js/store.js` — persists selected words + cards + SRS state in
-    `localStorage`; batch generation, intro-vs-review card selection,
-    and the merge primitives `js/sync.js` uses.
+  - `js/store.js` — persists selected words + cards + SRS state +
+    queued words in `localStorage`; batch generation, intro-vs-review
+    card selection, and the merge primitives `js/sync.js` uses.
   - `js/sync.js` — cloud backup/sync engine (push/pull against the
     worker, last-write-wins merge, retry-friendly).
   - `js/sync-ui.js` — the Cloud sync panel.
+  - `js/queue-ui.js` — the "Add word" panel.
   - `js/app.js` — UI wiring.
+- `manifest.webmanifest`, `sw.js`, `icons/` — PWA install manifest,
+  service worker, and app icons.
 - `data/source/` — the raw Scrabble word list + attribution notes.
 - `data/dictionary.json` — built dictionary asset the browser fetches
   (committed, since GitHub Pages doesn't run a build step).

@@ -86,20 +86,24 @@ export function forgetSyncId() {
   setStatus({ state: 'idle', lastSyncAt: null, lastError: null });
 }
 
-function chunkPushes(selectedWords, cards, maxPerRequest) {
-  if (selectedWords.length === 0 && cards.length === 0) {
-    return [{ selectedWords: [], cards: [] }];
+function chunkPushes(selectedWords, cards, pendingWords, maxPerRequest) {
+  if (selectedWords.length === 0 && cards.length === 0 && pendingWords.length === 0) {
+    return [{ selectedWords: [], cards: [], pendingWords: [] }];
   }
   const chunks = [];
   let i = 0;
   let j = 0;
-  while (i < selectedWords.length || j < cards.length) {
+  let k = 0;
+  while (i < selectedWords.length || j < cards.length || k < pendingWords.length) {
     const swChunk = selectedWords.slice(i, i + maxPerRequest);
     i += swChunk.length;
-    const remaining = maxPerRequest - swChunk.length;
+    let remaining = maxPerRequest - swChunk.length;
     const cardChunk = remaining > 0 ? cards.slice(j, j + remaining) : [];
     j += cardChunk.length;
-    chunks.push({ selectedWords: swChunk, cards: cardChunk });
+    remaining -= cardChunk.length;
+    const pendingChunk = remaining > 0 ? pendingWords.slice(k, k + remaining) : [];
+    k += pendingChunk.length;
+    chunks.push({ selectedWords: swChunk, cards: cardChunk, pendingWords: pendingChunk });
   }
   return chunks;
 }
@@ -121,8 +125,8 @@ export function runSync() {
   inFlight = (async () => {
     setStatus({ state: 'syncing', lastError: null });
     const since = getLastSyncAt();
-    const { selectedWords, cards } = getChangedSince(since);
-    const chunks = chunkPushes(selectedWords, cards, MAX_ROWS_PER_REQUEST);
+    const { selectedWords, cards, pendingWords } = getChangedSince(since);
+    const chunks = chunkPushes(selectedWords, cards, pendingWords, MAX_ROWS_PER_REQUEST);
 
     let serverTime = null;
     try {

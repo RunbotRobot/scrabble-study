@@ -1,5 +1,8 @@
+import { jumble, compareByValuegram } from './jumble.js';
+
 let words = null;
 let wordList = null;
+let anagramIndex = null;
 
 /** Fetches and parses data/dictionary.json once. Safe to call more than
  * once (subsequent calls reuse the same in-memory copy). */
@@ -52,4 +55,38 @@ export function resolveRoots(word) {
     for (const x of entry.x) roots.add(x.r);
   }
   return [...roots];
+}
+
+/** True if `word` appears anywhere in the dictionary (as a root or as an
+ * inflected form of one) — i.e. it's a legal Scrabble play. */
+export function wordExists(word) {
+  requireLoaded();
+  return Boolean(words[word]);
+}
+
+function buildAnagramIndex() {
+  anagramIndex = new Map();
+  for (const w of wordList) {
+    if (w.length > 8) continue; // jumbles are never built from longer forms
+    const key = jumble(w);
+    let bucket = anagramIndex.get(key);
+    if (!bucket) {
+      bucket = [];
+      anagramIndex.set(key, bucket);
+    }
+    bucket.push(w);
+  }
+}
+
+/** All dictionary words that are anagrams of `jumbleKey` (the same
+ * jumbled letters as produced by jumble()), in valuegram order. A jumble
+ * card's own `answer` is always one of these, but isn't necessarily the
+ * only one — e.g. BOITNARE resolves to both BARITONE and OBTAINER. Built
+ * lazily (once) on first use rather than at load time, since it's a full
+ * pass over the word list. */
+export function getAnagramSolutions(jumbleKey) {
+  requireLoaded();
+  if (!anagramIndex) buildAnagramIndex();
+  const bucket = anagramIndex.get(jumbleKey) || [];
+  return bucket.slice().sort(compareByValuegram);
 }

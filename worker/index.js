@@ -8,13 +8,13 @@
  * credential, the same way a share-link token or API key works.
  *
  * Request body:
- *   { since: string|null, selectedWords: Row[], cards: Row[] }
+ *   { since: string|null, selectedWords: Row[], cards: Row[], pendingWords: Row[] }
  * `since` is the ISO timestamp of the last successful sync (or null for a
- * brand new device pulling everything down). `selectedWords`/`cards` are
- * locally-changed rows to push up (can be empty).
+ * brand new device pulling everything down). `selectedWords`/`cards`/
+ * `pendingWords` are locally-changed rows to push up (can be empty).
  *
  * Response body:
- *   { serverTime: string, selectedWords: Row[], cards: Row[] }
+ *   { serverTime: string, selectedWords: Row[], cards: Row[], pendingWords: Row[] }
  * `serverTime` becomes the client's new `since` cursor. The returned rows
  * are everything changed (by any device) after `since`, INCLUDING rows
  * this same request just pushed — the client applies them the same way
@@ -81,6 +81,16 @@ function validateCard(row) {
   );
 }
 
+function validatePendingWord(row) {
+  return (
+    row &&
+    isNonEmptyString(row.word) &&
+    isNonEmptyString(row.added_at) &&
+    isNonEmptyString(row.updated_at) &&
+    (row.deleted === 0 || row.deleted === 1)
+  );
+}
+
 async function handleSync(request, env) {
   const syncId = request.headers.get('X-Sync-Id') || '';
   if (!SYNC_ID_RE.test(syncId)) {
@@ -97,12 +107,21 @@ async function handleSync(request, env) {
   const since = typeof body.since === 'string' ? body.since : null;
   const selectedWords = Array.isArray(body.selectedWords) ? body.selectedWords : [];
   const cards = Array.isArray(body.cards) ? body.cards : [];
+  const pendingWords = Array.isArray(body.pendingWords) ? body.pendingWords : [];
 
-  if (selectedWords.length > MAX_ROWS_PER_PUSH || cards.length > MAX_ROWS_PER_PUSH) {
+  if (
+    selectedWords.length > MAX_ROWS_PER_PUSH ||
+    cards.length > MAX_ROWS_PER_PUSH ||
+    pendingWords.length > MAX_ROWS_PER_PUSH
+  ) {
     return json({ error: `Too many rows in one push (max ${MAX_ROWS_PER_PUSH} each)` }, 400);
   }
-  if (!selectedWords.every(validateSelectedWord) || !cards.every(validateCard)) {
-    return json({ error: 'Malformed row in selectedWords or cards' }, 400);
+  if (
+    !selectedWords.every(validateSelectedWord) ||
+    !cards.every(validateCard) ||
+    !pendingWords.every(validatePendingWord)
+  ) {
+    return json({ error: 'Malformed row in selectedWords, cards, or pendingWords' }, 400);
   }
 
   const statements = [];
@@ -158,6 +177,20 @@ async function handleSync(request, env) {
     );
   }
 
+  for (const row of pendingWords) {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO pending_words (sync_id, word, added_at, updated_at, deleted)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(sync_id, word) DO UPDATE SET
+           added_at = excluded.added_at,
+           updated_at = excluded.updated_at,
+           deleted = excluded.deleted
+         WHERE excluded.updated_at > pending_words.updated_at`
+      ).bind(syncId, row.word, row.added_at, row.updated_at, row.deleted)
+    );
+  }
+
   // Timestamp taken before writes so nothing landing concurrently between
   // here and the SELECTs below is silently skipped on the next sync.
   const serverTime = new Date().toISOString();
@@ -176,10 +209,15 @@ async function handleSync(request, env) {
     ? await env.DB.prepare('SELECT * FROM cards WHERE sync_id = ? AND updated_at > ?').bind(syncId, since).all()
     : await env.DB.prepare('SELECT * FROM cards WHERE sync_id = ?').bind(syncId).all();
 
+  const changedPending = since
+    ? await env.DB.prepare('SELECT * FROM pending_words WHERE sync_id = ? AND updated_at > ?').bind(syncId, since).all()
+    : await env.DB.prepare('SELECT * FROM pending_words WHERE sync_id = ?').bind(syncId).all();
+
   return json({
     serverTime,
     selectedWords: changedSelected.results.map(({ sync_id, ...rest }) => rest),
     cards: changedCards.results.map(({ sync_id, ...rest }) => rest),
+    pendingWords: changedPending.results.map(({ sync_id, ...rest }) => rest),
   });
 }
 

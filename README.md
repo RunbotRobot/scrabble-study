@@ -69,11 +69,10 @@ existing progress first).
 
 Once a card's graduated out of intro drilling, there's no due/not-due
 cutoff gating whether it can come up — every graduated card is always
-eligible, ranked by a priority score, and the highest-priority one is
-always what's shown next. (This is deliberate: a hard due date means you
-eventually run out of due cards and hit a dead end with nothing left to
-study, even though you have plenty of cards that could still use
-review.) Priority combines two things:
+eligible, ranked by a priority score. (This is deliberate: a hard due
+date means you eventually run out of due cards and hit a dead end with
+nothing left to study, even though you have plenty of cards that could
+still use review.) Priority combines two things:
 
 - how overdue it is, as a fraction of its own spaced-repetition interval
   — a 1-day-old card that's 2 days late is more urgent than a 30-day-old
@@ -81,6 +80,17 @@ review.) Priority combines two things:
 - how much harder than average it's been recently, via the same `ease`
   value the SM-2 scheduler already tracks (it falls on a miss, rises on
   a streak of correct answers)
+
+The next card is picked at random, weighted toward higher priority,
+rather than always strictly the single highest. That matters in
+practice: cards that graduated together tend to start out tied (nothing's
+overdue yet, so `ease` is the only thing distinguishing them), and always
+picking the strict max in a tie means whichever card happens to be ahead
+by a hair keeps winning forever — which, if e.g. one card type has taken
+a few more early misses than another, can starve that other type out of
+the rotation completely. Weighting instead of hard-maxing means a
+clearly-more-urgent card is picked far more often, but nothing is ever
+fully locked out.
 
 ## Tracking recent mistakes
 

@@ -196,16 +196,35 @@ export function getNextCard() {
   if (reviewPool.length === 0) return { card: null, introRemaining: 0 };
 
   const nowMs = Date.now();
-  let best = reviewPool[0];
-  let bestPriority = reviewPriority(best, nowMs);
-  for (let i = 1; i < reviewPool.length; i++) {
-    const priority = reviewPriority(reviewPool[i], nowMs);
-    if (priority > bestPriority) {
-      best = reviewPool[i];
-      bestPriority = priority;
-    }
+  return { card: pickWeightedByPriority(reviewPool, nowMs), introRemaining: 0 };
+}
+
+/** Picks one card at random, weighted toward higher priority — as
+ * opposed to always the single highest. Two cards a hair's-breadth apart
+ * in priority are (correctly) close to equally likely to be picked; a
+ * card that's clearly way more urgent is picked far more often, but a
+ * calmer card is never fully locked out.
+ *
+ * Picking strictly the max every time turned out to starve whole card
+ * types: freshly-graduated cards mostly tie near the same priority (they
+ * were all just reviewed together, so "how overdue" hasn't diverged
+ * yet), so the ranking comes down to tiny `ease` differences — and once
+ * *some* type has taken a few early misses, its slightly lower ease
+ * means it wins that comparison forever, while a type you're doing
+ * fine on (never below the max) never gets picked again at all. */
+function pickWeightedByPriority(pool, nowMs) {
+  const priorities = pool.map((c) => reviewPriority(c, nowMs));
+  const maxPriority = Math.max(...priorities);
+  // exp(priority - max): the top card gets weight 1; others fall off
+  // smoothly the further behind they are, but nothing hits exactly zero.
+  const weights = priorities.map((p) => Math.exp(p - maxPriority));
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return pool[i];
   }
-  return { card: best, introRemaining: 0 };
+  return pool[pool.length - 1];
 }
 
 /** Grades a card and updates its SRS state. For a graduated ("review"-

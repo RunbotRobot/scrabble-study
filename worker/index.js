@@ -28,14 +28,22 @@
  * deleted cards out of everything it shows, but keeps the tombstone
  * around locally so last-write-wins still has something to compare
  * against if an older, non-deleted version of that row shows up later.
+ *
+ * Second endpoint, GET /image/:word[?prompt=...]. Images are shared,
+ * global assets keyed only by word (not per sync ID — "a crown of
+ * flowers" for HAKU is the same picture for everyone). On a cache miss,
+ * generates one via Pollinations.ai (free, keyless) using `prompt` (the
+ * word's definition, supplied by the client) and stores it in R2 before
+ * returning it, so every word is generated at most once, ever.
  */
 
 const SYNC_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+const WORD_RE = /^[A-Z]+$/;
 const MAX_ROWS_PER_PUSH = 1000;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-Sync-Id',
 };
 
@@ -221,6 +229,33 @@ async function handleSync(request, env) {
   });
 }
 
+const IMAGE_CACHE_HEADERS = {
+  'Cache-Control': 'public, max-age=31536000, immutable',
+  ...CORS_HEADERS,
+};
+
+async function handleImage(request, env, word) {
+  if (!WORD_RE.test(word)) {
+    return json({ error: 'Invalid word' }, 400);
+  }
+  const key = `${word}.jpg`;
+
+  const existing = await env.IMAGES.get(key);
+  if (existing) {
+    return new Response(existing.body, { headers: { 'Content-Type': 'image/jpeg', ...IMAGE_CACHE_HEADERS } });
+  }
+
+  const prompt = new URL(request.url).searchParams.get('prompt') || word;
+  const genUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`;
+  const genRes = await fetch(genUrl);
+  if (!genRes.ok) {
+    return json({ error: `Image generation failed: ${genRes.status}` }, 502);
+  }
+  const bytes = await genRes.arrayBuffer();
+  await env.IMAGES.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  return new Response(bytes, { headers: { 'Content-Type': 'image/jpeg', ...IMAGE_CACHE_HEADERS } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -232,6 +267,15 @@ export default {
     if (url.pathname === '/sync' && request.method === 'POST') {
       try {
         return await handleSync(request, env);
+      } catch (err) {
+        return json({ error: `Internal error: ${err.message}` }, 500);
+      }
+    }
+
+    const imageMatch = url.pathname.match(/^\/image\/([^/]+)$/);
+    if (imageMatch && request.method === 'GET') {
+      try {
+        return await handleImage(request, env, decodeURIComponent(imageMatch[1]));
       } catch (err) {
         return json({ error: `Internal error: ${err.message}` }, 500);
       }

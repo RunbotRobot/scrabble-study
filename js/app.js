@@ -4,6 +4,7 @@ import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
+import { imageUrlFor } from './images.js';
 
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
@@ -78,19 +79,27 @@ function blurBlock(kind) {
  * def2word: the definition is given, the word is the (hidden) answer.
  * Either way the word always renders on the left and the definition
  * always renders on the right — that positioning is what tells you
- * which kind of card this is, instead of a text label. */
+ * which kind of card this is, instead of a text label.
+ *
+ * The illustration only ever appears once the definition itself is
+ * visible (revealed, or given from the start on a def2word card) — it
+ * depicts the definition, so showing it any earlier on a word2def card
+ * would spoil the very thing you're being asked to recall. */
 function renderWordDefCard(card, revealed) {
   const wordGiven = card.type === 'word2def';
   const word = wordGiven ? card.prompt : card.answer;
   const definition = wordGiven ? card.answer : card.prompt;
+  const definitionVisible = revealed || !wordGiven;
   const wordHighlight = revealed && !wordGiven ? ' answer-highlight' : '';
   const defHighlight = revealed && wordGiven ? ' answer-highlight' : '';
   const wordContent =
     revealed || wordGiven ? `<div class="wd-content${wordHighlight}">${word}</div>` : blurBlock('word');
-  const defContent =
-    revealed || !wordGiven
-      ? `<div class="wd-content wd-definition${defHighlight}">${definition}</div>`
-      : blurBlock('definition');
+  const defContent = definitionVisible
+    ? `<div class="wd-content wd-definition${defHighlight}">${definition}</div>`
+    : blurBlock('definition');
+  const imageContent = definitionVisible
+    ? `<img class="wd-image" src="${imageUrlFor(word, definition)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+    : '';
   return `
     <div class="word-def-row">
       <div class="wd-slot">
@@ -100,6 +109,7 @@ function renderWordDefCard(card, revealed) {
       <div class="wd-slot">
         <div class="wd-label">Definition</div>
         ${defContent}
+        ${imageContent}
       </div>
     </div>
   `;

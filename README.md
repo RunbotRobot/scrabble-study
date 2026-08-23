@@ -133,6 +133,12 @@ Once revealed, the answer side gets a background tint distinct from the
 "given" side, so it's obvious at a glance which piece you were actually
 asked to produce.
 
+Whenever a definition is visible — revealed on a word2def card, or given
+from the start on a def2word card — a small illustration appears beneath
+it, generated from that definition (see "Root word images" below). It
+never appears before the definition itself does, since it would
+otherwise give away the answer on a word2def card.
+
 ## Endings cards
 
 Some root senses point at a "self-explanatory" derived word instead of
@@ -170,6 +176,19 @@ valuegram order — but only the ones that are actually in your deck (i.e.
 you have a jumble card for that exact word). The dictionary usually has
 more anagram solutions than that; the rest aren't shown, since they're
 not something you're being asked to already know.
+
+## Root word images
+
+Each root with a definition gets a small illustration generated from
+that definition — shown on word2def/def2word cards (see "Card
+presentation" above) and in the lookup panel. Images are free to
+generate (via [Pollinations.ai](https://pollinations.ai), which needs no
+API key) and shared globally rather than per-device: the worker's `GET
+/image/:word` endpoint generates an image on the first request for a
+given word and caches it in Cloudflare R2 forever after, so every device
+— and every other word that happens to share a root — benefits from that
+one generation. Roots with no definition on file don't get an image;
+there's nothing meaningful to illustrate.
 
 ## Options panel and looking up a word
 
@@ -269,7 +288,9 @@ settings:
 
 The D1 database (`scrabble-study-db`) and its schema already exist —
 `worker/wrangler.toml` references it by ID, so a fresh deploy just picks
-it back up.
+it back up. Same for the `scrabble-study-images` R2 bucket the image
+endpoint reads/writes (no API key needed — it calls Pollinations.ai,
+which is keyless).
 
 ## Project layout
 
@@ -290,6 +311,8 @@ it back up.
     card selection, and the merge primitives `js/sync.js` uses.
   - `js/sync.js` — cloud backup/sync engine (push/pull against the
     worker, last-write-wins merge, retry-friendly).
+  - `js/images.js` — builds a root word's illustration URL (see "Root
+    word images" above).
   - `js/sync-ui.js` — the Cloud sync panel.
   - `js/lookup-ui.js` — the "?" word lookup panel.
   - `js/app.js` — UI wiring.

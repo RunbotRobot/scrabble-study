@@ -197,6 +197,17 @@ button.secondary {
   font-weight: 500;
 }
 
+.wd-image {
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-top: 0.6rem;
+  border: 1px solid var(--border);
+}
+
 /* Marks whichever side of a card was the hidden answer, once revealed —
    so it's visually obvious which piece you were asked to produce and
    which was given. */

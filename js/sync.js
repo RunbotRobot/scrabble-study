@@ -15,7 +15,7 @@
 
 import { getChangedSince, mergeRemote } from './store.js';
 
-const WORKER_URL = 'https://scrabble-study-sync.runbotrobot.workers.dev';
+export const WORKER_URL = 'https://scrabble-study-sync.runbotrobot.workers.dev';
 
 const KEY_SYNC_ID = 'scrabbleStudy.syncId';
 const KEY_LAST_SYNC_AT = 'scrabbleStudy.lastSyncAt';

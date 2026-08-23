@@ -6,3 +6,7 @@ compatibility_date = "2024-11-01"
 binding = "DB"
 database_name = "scrabble-study-db"
 database_id = "6d162738-a6d0-46f9-bdfc-d16fccc32259"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "scrabble-study-images"

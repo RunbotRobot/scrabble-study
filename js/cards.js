@@ -27,7 +27,7 @@ export function buildCardSpecs(rootWord) {
   if (!senses) return null;
 
   const definedSenses = senses.filter((s) => s.definition);
-  const definitionText = definedSenses.map((s) => `${s.definition} (${s.pos})`).join(' / ');
+  const definitionText = definedSenses.map((s) => s.definition).join(' / ');
 
   const inflections = new Set();
   for (const s of senses) {

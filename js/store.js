@@ -5,7 +5,7 @@
  * sync on top of this — see there for how remote merges happen.
  */
 
-import { pickRandomWord, resolveRoots, wordExists, wordCount, getRootSenses } from './dictionary.js';
+import { pickRandomWord, resolveRoots, wordExists, wordCount, getRootSenses, getAnagramSolutions } from './dictionary.js';
 import { buildCardSpecs } from './cards.js';
 import { initialState, schedule, DEFAULT_EASE } from './srs.js';
 
@@ -22,9 +22,9 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
  * own first two learning steps — see js/srs.js). */
 const INTRO_GRADUATION_REPS = 2;
 
-/** Once this many distinct review-phase cards are sitting in the
- * "recently missed" pile at once, they all go back into intensive intro
- * drilling together — see answerCard. */
+/** Once this many distinct cards are sitting in the "recently missed"
+ * pile (held out of rotation — see answerCard) at once, they all go back
+ * into intensive intro drilling together. */
 const MISTAKE_BATCH_SIZE = 50;
 
 function load(key, fallback) {
@@ -285,9 +285,11 @@ function reviewPriority(card, nowMs) {
 /** The card to show next: any card still in its intensive "intro"
  * rotation takes priority over everything else (least-recently-shown
  * first), regardless of due date — that's what makes it intensive. Once
- * there are no intro cards left, the highest-priority graduated card is
- * shown (see reviewPriority) — there's no due-date gate, so this only
- * comes back empty if there are truly no cards at all. */
+ * there are no intro cards left, the highest-priority graduated
+ * ("review"-phase) card is shown (see reviewPriority) — there's no
+ * due-date gate, so this only comes back empty if there are truly no
+ * cards at all (or every card is 'held' in the recently-missed pile —
+ * see answerCard — which this deliberately never selects). */
 export function getNextCard() {
   const cards = getCards().filter((c) => !c.deleted);
 
@@ -349,12 +351,15 @@ function pickWeightedByPriority(pool, nowMs) {
  * "recently missed" pile — but only for already-graduated ("review"-
  * phase) cards. Intro-phase cards are deliberately excluded: they're
  * already getting intensive round-robin drilling, so folding their
- * misses into this pile too would be redundant. A miss on a review card
- * adds it to the pile, a subsequent correct answer removes it again, and
- * once the pile reaches MISTAKE_BATCH_SIZE distinct cards they're all
- * sent back into intensive intro drilling together (same mechanism as a
- * fresh batch of new words) and the pile resets. Returns the updated
- * card and, when the batch just triggered, { cardCount }. */
+ * misses into this pile too would be redundant.
+ *
+ * Missing a review card pulls it out of rotation immediately: its phase
+ * becomes 'held', which getNextCard never selects, so it won't come up
+ * again until the whole pile is dealt with. Once the pile reaches
+ * MISTAKE_BATCH_SIZE distinct cards, all of them go back into intensive
+ * intro drilling together (same mechanism as a fresh batch of new words)
+ * and the pile resets. Returns the updated card and, when the batch just
+ * triggered, { cardCount }. */
 export function answerCard(id, correct) {
   const cards = getCards();
   const card = cards.find((c) => c.id === id);
@@ -374,13 +379,12 @@ export function answerCard(id, correct) {
   }
 
   let mistakeBatch = null;
-  if (wasReview) {
+  if (wasReview && !correct) {
+    card.phase = 'held';
+    card.updated_at = nowIso;
+
     let recentlyWrong = getRecentlyWrong();
-    if (correct) {
-      recentlyWrong = recentlyWrong.filter((x) => x !== id);
-    } else if (!recentlyWrong.includes(id)) {
-      recentlyWrong = [...recentlyWrong, id];
-    }
+    if (!recentlyWrong.includes(id)) recentlyWrong = [...recentlyWrong, id];
     if (recentlyWrong.length >= MISTAKE_BATCH_SIZE) {
       let cardCount = 0;
       for (const wrongId of recentlyWrong) {
@@ -399,6 +403,21 @@ export function answerCard(id, correct) {
 
   save(KEY_CARDS, cards);
   return { card, mistakeBatch };
+}
+
+/** All of a jumble's dictionary anagram solutions that also happen to be
+ * in your deck (i.e. you have a non-deleted jumble card whose answer is
+ * that word) — narrower than dictionary.js's getAnagramSolutions, which
+ * returns every dictionary word with those letters regardless of
+ * whether you're studying it. Always includes the card's own answer, so
+ * never empty for a real jumble card. Still in valuegram order. */
+export function getDeckAnagramSolutions(jumbleKey) {
+  const inDeck = new Set(
+    getCards()
+      .filter((c) => c.type === 'jumble' && !c.deleted)
+      .map((c) => c.answer)
+  );
+  return getAnagramSolutions(jumbleKey).filter((w) => inDeck.has(w));
 }
 
 export function getStats() {

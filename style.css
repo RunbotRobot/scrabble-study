@@ -322,6 +322,10 @@ button.grade-incorrect { background: var(--bad); }
   overflow-y: auto;
 }
 
+.lookup-overlay[hidden] {
+  display: none;
+}
+
 .lookup-dialog {
   background: var(--panel);
   border-radius: 12px;
@@ -334,6 +338,7 @@ button.grade-incorrect { background: var(--bad); }
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  justify-content: space-between;
 }
 
 .lookup-form {
@@ -357,6 +362,27 @@ button.grade-incorrect { background: var(--bad); }
 .lookup-body {
   margin-top: 1rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.options-title {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.options-section {
+  margin-top: 1.5rem;
+}
+
+.options-subhead {
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
 }
 
 .lookup-root + .lookup-root {

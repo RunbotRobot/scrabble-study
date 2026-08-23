@@ -1,5 +1,5 @@
-import { loadDictionary, getAnagramSolutions } from './dictionary.js';
-import { generateIntroBatch, getNextCard, answerCard, getStats } from './store.js';
+import { loadDictionary } from './dictionary.js';
+import { generateIntroBatch, getNextCard, answerCard, getStats, getDeckAnagramSolutions } from './store.js';
 import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
@@ -11,6 +11,22 @@ const studyCard = document.getElementById('study-card');
 const syncPanelEl = document.getElementById('sync-panel');
 const lookupBtnEl = document.getElementById('lookup-btn');
 const lookupModalEl = document.getElementById('lookup-modal-root');
+const optionsBtnEl = document.getElementById('options-btn');
+const optionsModalEl = document.getElementById('options-modal-root');
+const optionsCloseEl = document.getElementById('options-close');
+
+function closeOptions() {
+  optionsModalEl.hidden = true;
+}
+
+optionsBtnEl.addEventListener('click', () => {
+  optionsModalEl.hidden = false;
+});
+optionsCloseEl.addEventListener('click', closeOptions);
+optionsModalEl.addEventListener('click', (e) => {
+  if (e.target === optionsModalEl) closeOptions();
+});
+lookupBtnEl.addEventListener('click', closeOptions);
 
 function refreshStats() {
   const stats = getStats();
@@ -36,7 +52,7 @@ function renderJumbleTiles(card) {
 function typeLineFor(card, introRemaining) {
   const introNote = card.phase === 'intro' ? `New (${introRemaining} left)` : '';
   if (card.type === 'jumble') {
-    const solutions = getAnagramSolutions(card.prompt);
+    const solutions = getDeckAnagramSolutions(card.prompt);
     const solutionNote = `${solutions.length} solution${solutions.length === 1 ? '' : 's'}`;
     return `<div class="card-type">${['Jumble', introNote, solutionNote].filter(Boolean).join(' · ')}</div>`;
   }
@@ -116,7 +132,7 @@ function renderEndingsCard(card, revealed) {
 function renderCardBody(card, revealed) {
   if (card.type === 'jumble') {
     return revealed
-      ? `${renderJumbleTiles(card)}<div class="card-answer answer-highlight">${getAnagramSolutions(card.prompt).join(', ')}</div>`
+      ? `${renderJumbleTiles(card)}<div class="card-answer answer-highlight">${getDeckAnagramSolutions(card.prompt).join(', ')}</div>`
       : renderJumbleTiles(card);
   }
   if (card.type === 'endings') return renderEndingsCard(card, revealed);

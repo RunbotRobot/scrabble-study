@@ -76,7 +76,7 @@ function validateCard(row) {
     (row.last_reviewed_at === null || isNonEmptyString(row.last_reviewed_at)) &&
     isNonEmptyString(row.created_at) &&
     isNonEmptyString(row.updated_at) &&
-    (row.phase === 'intro' || row.phase === 'review') &&
+    (row.phase === 'intro' || row.phase === 'review' || row.phase === 'held') &&
     (row.deleted === 0 || row.deleted === 1)
   );
 }

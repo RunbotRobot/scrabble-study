@@ -49,9 +49,12 @@ Each time a batch is generated:
 
 Definitions are shown verbatim from the source dictionary file (see
 `data/source/ATTRIBUTION.md`), aside from expanding its `{word=pos}`
-shorthand notation into the plain word it refers to, and pulling out any
+shorthand notation into the plain word it refers to; pulling out any
 trailing "self-explanatory derived form" pointer (see "Endings cards")
-into its own card instead of leaving it stuck in the definition text.
+into its own card instead of leaving it stuck in the definition text; and
+dropping the part-of-speech tag the source data carries per sense (`n`,
+`v`, `adj`, ...) — it's almost always obvious from the definition itself,
+so showing it added noise without adding information.
 
 ## Streaks and introducing new cards
 
@@ -105,13 +108,16 @@ fully locked out.
 
 ## Tracking recent mistakes
 
-Missing an already-graduated ("review"-phase) card adds it to a running
-"recently missed" pile; getting it right again removes it. Once that pile
-reaches 50 distinct cards, all 50 go back into intensive intro drilling
-together (the exact same mechanism as a fresh batch of new words), and
-the pile resets to build up again from there. Misses on intro-phase cards
-don't feed this pile — they're already getting intensive round-robin
-drilling (see above), so folding them in here too would be redundant.
+Missing an already-graduated ("review"-phase) card pulls it out of
+rotation immediately — it's held in a "recently missed" pile and won't
+come up again until the pile is dealt with, rather than staying in normal
+rotation where you might see (and re-miss) it again before that happens.
+Once the pile reaches 50 distinct cards, all 50 go back into intensive
+intro drilling together (the exact same mechanism as a fresh batch of new
+words), and the pile resets to build up again from there. Misses on
+intro-phase cards don't feed this pile — they're already getting
+intensive round-robin drilling (see above), so folding them in here too
+would be redundant.
 
 ## Card presentation
 
@@ -157,16 +163,21 @@ that are both real dictionary words (e.g. `BOITNARE` solves to both
 necessarily the word the card was built from, guessing any correct
 solution should count as getting it right. The card tells you upfront how
 many solutions exist, and "Show answer" lists all of them, each also in
-valuegram order.
+valuegram order — but only the ones that are actually in your deck (i.e.
+you have a jumble card for that exact word). The dictionary usually has
+more anagram solutions than that; the rest aren't shown, since they're
+not something you're being asked to already know.
 
-## Looking up a word
+## Options panel and looking up a word
 
-The **?** button opens a lookup panel: type any word to see whether it's
-valid ("PHONY" if not), its root(s)' definition(s), and its
-conjugations/plurals. If every root the word resolves to is already in
-your deck, you'll also see your current quizzing stats for each of its
-cards (learning vs. reviewing, miss count); otherwise an **Add** button
-queues it — see "How word selection works" above.
+The **⚙** button in the header opens an Options panel with two things:
+Cloud sync (see below), and a **?** button that opens the word lookup
+panel. Type any word there to see whether it's valid ("PHONY" if not),
+its root(s)' definition(s), and its conjugations/plurals. If every root
+the word resolves to is already in your deck, you'll also see your
+current quizzing stats for each of its cards (learning vs. reviewing,
+miss count); otherwise an **Add** button queues it — see "How word
+selection works" above.
 
 ## Installing as an app
 
@@ -189,7 +200,7 @@ first, so the app is fully usable offline and never blocks on the
 network. On top of that, a small Cloudflare Worker + D1 database (see
 `worker/`) acts as a durable backup and cross-device sync layer:
 
-- Tap **Start cloud sync** in the Cloud sync panel. This generates a
+- Open the **⚙** Options panel and tap **Start cloud sync**. This generates a
   random "sync code" (there's no account/password — the code itself is
   the credential, like a share link) and starts pushing your local
   progress to the cloud.

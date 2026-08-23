@@ -17,7 +17,7 @@
   <header>
     <div class="header-row">
       <h1>Scrabble Study</h1>
-      <button id="lookup-btn" class="lookup-btn" type="button" aria-label="Look up a word">?</button>
+      <button id="options-btn" class="lookup-btn" type="button" aria-label="Options">⚙</button>
     </div>
     <dl id="stats" class="stats"></dl>
   </header>
@@ -30,12 +30,23 @@
         <p class="card-empty">Loading&hellip;</p>
       </div>
     </section>
-
-    <section class="panel">
-      <h2>Cloud sync</h2>
-      <div id="sync-panel"></div>
-    </section>
   </main>
+
+  <div id="options-modal-root" class="lookup-overlay" hidden>
+    <div class="lookup-dialog">
+      <div class="lookup-top">
+        <h2 class="options-title">Options</h2>
+        <button id="options-close" class="secondary" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="lookup-body">
+        <button id="lookup-btn" class="secondary" type="button">? Look up a word</button>
+        <div class="options-section">
+          <h3 class="options-subhead">Cloud sync</h3>
+          <div id="sync-panel"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div id="lookup-modal-root"></div>
 

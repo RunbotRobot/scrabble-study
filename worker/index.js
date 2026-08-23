@@ -22,7 +22,12 @@
  *
  * Conflict resolution is last-write-wins per row, compared by
  * `updated_at`: an incoming row only overwrites a stored one if its
- * updated_at is strictly newer. Nothing is ever deleted.
+ * updated_at is strictly newer. Rows are never actually deleted from D1 —
+ * a card is "removed" by setting its `deleted` flag to 1 (with a fresh
+ * updated_at), which syncs like any other change. The client filters
+ * deleted cards out of everything it shows, but keeps the tombstone
+ * around locally so last-write-wins still has something to compare
+ * against if an older, non-deleted version of that row shows up later.
  */
 
 const SYNC_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -71,7 +76,8 @@ function validateCard(row) {
     (row.last_reviewed_at === null || isNonEmptyString(row.last_reviewed_at)) &&
     isNonEmptyString(row.created_at) &&
     isNonEmptyString(row.updated_at) &&
-    (row.phase === 'intro' || row.phase === 'review')
+    (row.phase === 'intro' || row.phase === 'review') &&
+    (row.deleted === 0 || row.deleted === 1)
   );
 }
 
@@ -118,8 +124,8 @@ async function handleSync(request, env) {
   for (const row of cards) {
     statements.push(
       env.DB.prepare(
-        `INSERT INTO cards (sync_id, id, root_word, type, prompt, answer, interval_days, ease, reps, lapses, due_at, last_reviewed_at, created_at, updated_at, phase)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO cards (sync_id, id, root_word, type, prompt, answer, interval_days, ease, reps, lapses, due_at, last_reviewed_at, created_at, updated_at, phase, deleted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(sync_id, id) DO UPDATE SET
            interval_days = excluded.interval_days,
            ease = excluded.ease,
@@ -128,7 +134,8 @@ async function handleSync(request, env) {
            due_at = excluded.due_at,
            last_reviewed_at = excluded.last_reviewed_at,
            updated_at = excluded.updated_at,
-           phase = excluded.phase
+           phase = excluded.phase,
+           deleted = excluded.deleted
          WHERE excluded.updated_at > cards.updated_at`
       ).bind(
         syncId,
@@ -145,7 +152,8 @@ async function handleSync(request, env) {
         row.last_reviewed_at,
         row.created_at,
         row.updated_at,
-        row.phase
+        row.phase,
+        row.deleted
       )
     );
   }

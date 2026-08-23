@@ -82,7 +82,10 @@ network. On top of that, a small Cloudflare Worker + D1 database (see
 - If you lose or wipe this device, your progress isn't gone — set up a
   fresh device with the same sync code.
 - Conflicts (e.g. answering the same card on two devices before they
-  sync) resolve last-write-wins per card; nothing is ever deleted.
+  sync) resolve last-write-wins per card. Removing a card doesn't delete
+  its row outright — it's flagged and hidden everywhere, so the removal
+  itself has something to sync (an outright delete would just look like
+  "nothing happened" to a device that already has the card).
 - If you never set up sync, or the network's unavailable, everything
   still works exactly as before — just local to this browser.
 

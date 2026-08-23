@@ -1,5 +1,5 @@
 import { loadDictionary } from './dictionary.js';
-import { generateIntroBatch, getNextCard, answerCard, getStats, getRecentWords } from './store.js';
+import { generateIntroBatch, getNextCard, answerCard, getStats } from './store.js';
 import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
@@ -7,7 +7,6 @@ import { initSyncUI } from './sync-ui.js';
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
 const studyCard = document.getElementById('study-card');
-const recentWordsEl = document.getElementById('recent-words');
 const syncPanelEl = document.getElementById('sync-panel');
 
 function fmtDue(dueAtIso) {
@@ -29,18 +28,6 @@ function refreshStats() {
     ${stats.introducing > 0 ? `<div><dt>Introducing</dt><dd>${stats.introducing.toLocaleString()}</dd></div>` : ''}
     <div><dt>Streak</dt><dd>${getStreak().toLocaleString()}</dd></div>
   `;
-}
-
-function refreshRecentWords() {
-  const words = getRecentWords(25);
-  recentWordsEl.innerHTML = words
-    .map(
-      (w) =>
-        `<li><span>${w.root_word}</span><span class="via">${
-          w.via_word !== w.root_word ? `via ${w.via_word}` : ''
-        }</span></li>`
-    )
-    .join('');
 }
 
 function cardTypeLabel(type) {
@@ -106,7 +93,6 @@ function grade(correct) {
     milestoneMessageEl.textContent = result.ok
       ? `🔥 ${streak} in a row! Added ${result.cardsAdded} new card${result.cardsAdded === 1 ? '' : 's'} across ${result.wordsAdded} word${result.wordsAdded === 1 ? '' : 's'} to learn.`
       : `🔥 ${streak} in a row! Couldn't find any new words to add — you may have studied the whole dictionary.`;
-    refreshRecentWords();
   }
 
   refreshStats();
@@ -127,7 +113,6 @@ function bootstrapIfEmpty() {
     } across ${result.wordsAdded} word${result.wordsAdded === 1 ? '' : 's'} to get you started.`;
   }
   refreshStats();
-  refreshRecentWords();
   loadNextCard();
   scheduleSync();
 }
@@ -141,7 +126,6 @@ function bootstrapIfEmpty() {
     return;
   }
   refreshStats();
-  refreshRecentWords();
   loadNextCard();
   initSyncUI(syncPanelEl);
   startBackgroundSync();
@@ -167,7 +151,6 @@ function bootstrapIfEmpty() {
   onStatusChange((status) => {
     if (wasSyncing && status.state !== 'syncing') {
       refreshStats();
-      refreshRecentWords();
       if (!currentCard) loadNextCard();
       maybeBootstrap();
     }

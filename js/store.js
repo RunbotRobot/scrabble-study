@@ -38,8 +38,12 @@ function getSelected() {
 }
 
 function getCards() {
-  // Defensive default for cards persisted before `phase` existed.
-  return load(KEY_CARDS, []).map((c) => (c.phase ? c : { ...c, phase: 'review' }));
+  // Defensive defaults for cards persisted before `phase`/`deleted` existed.
+  return load(KEY_CARDS, []).map((c) => ({
+    ...c,
+    phase: c.phase || 'review',
+    deleted: c.deleted || 0,
+  }));
 }
 
 /** A card's identity is fully determined by what it's made of (root word,
@@ -74,6 +78,7 @@ function addRootToStudy(rootWord, viaWord, now, phase, selected, cards) {
       created_at: nowIso,
       updated_at: nowIso,
       phase,
+      deleted: 0,
     });
   }
   return specs.length;
@@ -135,7 +140,7 @@ export function generateIntroBatch(minCards = 50) {
  * there are no intro cards left, falls back to normal due-date-gated
  * review. */
 export function getNextCard() {
-  const cards = getCards();
+  const cards = getCards().filter((c) => !c.deleted);
 
   const intro = cards.filter((c) => c.phase === 'intro');
   if (intro.length > 0) {
@@ -176,7 +181,7 @@ export function answerCard(id, correct) {
 
 export function getStats() {
   const now = new Date().toISOString();
-  const cards = getCards();
+  const cards = getCards().filter((c) => !c.deleted);
   const byType = {};
   for (const c of cards) byType[c.type] = (byType[c.type] || 0) + 1;
   return {
@@ -187,13 +192,6 @@ export function getStats() {
     introducing: cards.filter((c) => c.phase === 'intro').length,
     cardsByType: byType,
   };
-}
-
-export function getRecentWords(limit = 25) {
-  return getSelected()
-    .slice()
-    .sort((a, b) => (a.selected_at < b.selected_at ? 1 : a.selected_at > b.selected_at ? -1 : 0))
-    .slice(0, limit);
 }
 
 // --- Sync support (see js/sync.js) -----------------------------------

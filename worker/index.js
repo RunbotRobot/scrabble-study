@@ -70,7 +70,8 @@ function validateCard(row) {
     isNonEmptyString(row.due_at) &&
     (row.last_reviewed_at === null || isNonEmptyString(row.last_reviewed_at)) &&
     isNonEmptyString(row.created_at) &&
-    isNonEmptyString(row.updated_at)
+    isNonEmptyString(row.updated_at) &&
+    (row.phase === 'intro' || row.phase === 'review')
   );
 }
 
@@ -117,8 +118,8 @@ async function handleSync(request, env) {
   for (const row of cards) {
     statements.push(
       env.DB.prepare(
-        `INSERT INTO cards (sync_id, id, root_word, type, prompt, answer, interval_days, ease, reps, lapses, due_at, last_reviewed_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO cards (sync_id, id, root_word, type, prompt, answer, interval_days, ease, reps, lapses, due_at, last_reviewed_at, created_at, updated_at, phase)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(sync_id, id) DO UPDATE SET
            interval_days = excluded.interval_days,
            ease = excluded.ease,
@@ -126,7 +127,8 @@ async function handleSync(request, env) {
            lapses = excluded.lapses,
            due_at = excluded.due_at,
            last_reviewed_at = excluded.last_reviewed_at,
-           updated_at = excluded.updated_at
+           updated_at = excluded.updated_at,
+           phase = excluded.phase
          WHERE excluded.updated_at > cards.updated_at`
       ).bind(
         syncId,
@@ -142,7 +144,8 @@ async function handleSync(request, env) {
         row.due_at,
         row.last_reviewed_at,
         row.created_at,
-        row.updated_at
+        row.updated_at,
+        row.phase
       )
     );
   }

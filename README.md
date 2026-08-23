@@ -7,9 +7,13 @@ via GitHub Pages at **https://runbotrobot.github.io/scrabble-study/**.
 
 ## How word selection works
 
-1. **Add a random word** picks one word from the *entire* word list —
-   root, conjugated, or plural form — with uniform probability. No
-   weighting toward common, "useful," or alphabetically-early words.
+There's no manual "add a word" button — new words arrive automatically,
+tied to a 50-answer correct streak (see below). Each time a batch is
+generated:
+
+1. A word is picked from the *entire* word list — root, conjugated, or
+   plural form — with uniform probability. No weighting toward common,
+   "useful," or alphabetically-early words.
 2. That word is resolved to its dictionary root(s). Most words resolve to
    exactly one root (e.g. `WENT` → `GO`), but some resolve to more than
    one root because they're independently meaningful under different
@@ -24,10 +28,35 @@ via GitHub Pages at **https://runbotrobot.github.io/scrabble-study/**.
      `QVUWGBFJYOPLKITMDCNHARZXES` (deterministic, not a random shuffle).
    - A root with no dictionary definition on file (some newer Scrabble
      words only have a part of speech, no gloss) only gets jumble cards.
+4. This repeats — picking further words and building out their roots —
+   until the batch has at least 50 cards. Because a single root can
+   produce a handful of cards, 50 is a floor, not a ceiling: the root
+   that's in progress when the count crosses 50 is always finished out,
+   so a batch is usually a bit over 50.
 
 Definitions are shown verbatim from the source dictionary file (see
 `data/source/ATTRIBUTION.md`), aside from expanding its `{word=pos}`
 shorthand notation into the plain word it refers to.
+
+## Streaks and introducing new cards
+
+Getting an answer right extends your current correct-answer streak;
+getting one wrong resets it to zero (shown in the stats bar). Every 50 in
+a row — 50, 100, 150, and so on — automatically generates a fresh batch
+of new cards (see above).
+
+A freshly-generated batch is drilled intensively: while any of its cards
+haven't yet been answered correctly twice, they take over the study queue
+entirely (cycled round-robin, ignoring normal spaced-repetition due
+dates) ahead of anything else due for review. Once a card's had two
+correct answers, it graduates into the normal spaced-repetition rotation
+like any other card, and once every card in the batch has graduated, due
+reviews resume as normal.
+
+The very first batch, before you've ever gotten anything right to build a
+streak with, is seeded automatically the first time the app has zero
+cards (after giving cloud sync, if configured, a chance to pull down
+existing progress first).
 
 ## Spaced repetition
 
@@ -113,8 +142,11 @@ it back up.
     for a root word.
   - `js/jumble.js` — the custom-letter-order jumble function.
   - `js/srs.js` — the spaced-repetition scheduler.
+  - `js/streak.js` — tracks the consecutive-correct streak and its
+    every-50 milestones.
   - `js/store.js` — persists selected words + cards + SRS state in
-    `localStorage`; exposes the merge primitives `js/sync.js` uses.
+    `localStorage`; batch generation, intro-vs-review card selection,
+    and the merge primitives `js/sync.js` uses.
   - `js/sync.js` — cloud backup/sync engine (push/pull against the
     worker, last-write-wins merge, retry-friendly).
   - `js/sync-ui.js` — the Cloud sync panel.

@@ -103,12 +103,14 @@ button.secondary {
   border: 1px solid var(--border);
 }
 
-.add-result {
-  margin: 0.75rem 0 0;
+.milestone-message {
+  margin: 0 0 1rem;
   font-size: 0.9rem;
-  color: var(--muted);
-  min-height: 1.2em;
+  color: var(--accent);
+  font-weight: 600;
 }
+
+.milestone-message:empty { display: none; }
 
 .card {
   min-height: 160px;

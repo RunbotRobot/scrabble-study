@@ -1,11 +1,11 @@
 import { loadDictionary } from './dictionary.js';
-import { addRandomWord, getNextDue, answerCard, getStats, getRecentWords } from './store.js';
-import { startBackgroundSync, scheduleSync, onStatusChange } from './sync.js';
+import { generateIntroBatch, getNextCard, answerCard, getStats, getRecentWords } from './store.js';
+import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
+import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
 
 const statsEl = document.getElementById('stats');
-const addWordBtn = document.getElementById('add-word-btn');
-const addWordResult = document.getElementById('add-word-result');
+const milestoneMessageEl = document.getElementById('milestone-message');
 const studyCard = document.getElementById('study-card');
 const recentWordsEl = document.getElementById('recent-words');
 const syncPanelEl = document.getElementById('sync-panel');
@@ -26,6 +26,8 @@ function refreshStats() {
     <div><dt>Words selected</dt><dd>${stats.selectedRootCount.toLocaleString()}</dd></div>
     <div><dt>Total cards</dt><dd>${stats.totalCards.toLocaleString()}</dd></div>
     <div><dt>Due now</dt><dd>${stats.dueNow.toLocaleString()}</dd></div>
+    ${stats.introducing > 0 ? `<div><dt>Introducing</dt><dd>${stats.introducing.toLocaleString()}</dd></div>` : ''}
+    <div><dt>Streak</dt><dd>${getStreak().toLocaleString()}</dd></div>
   `;
 }
 
@@ -59,18 +61,20 @@ function renderPrompt(card) {
 let currentCard = null;
 
 function loadNextCard() {
-  const { due, nextDueAt } = getNextDue(1);
-  if (due.length === 0) {
+  const { card, introRemaining, nextDueAt } = getNextCard();
+  if (!card) {
     currentCard = null;
     studyCard.innerHTML = `<p class="card-empty">${
-      nextDueAt ? `All caught up. Next card due ${fmtDue(nextDueAt)}.` : 'No cards yet — add a word to get started.'
+      nextDueAt ? `All caught up. Next card due ${fmtDue(nextDueAt)}.` : 'No cards yet.'
     }</p>`;
     return;
   }
-  currentCard = due[0];
+  currentCard = card;
+  const typeLabel =
+    card.phase === 'intro' ? `${cardTypeLabel(card.type)} · New (${introRemaining} left)` : cardTypeLabel(card.type);
   studyCard.innerHTML = `
-    <div class="card-type">${cardTypeLabel(currentCard.type)}</div>
-    ${renderPrompt(currentCard)}
+    <div class="card-type">${typeLabel}</div>
+    ${renderPrompt(card)}
     <button id="show-answer-btn" class="secondary">Show answer</button>
   `;
   document.getElementById('show-answer-btn').addEventListener('click', showAnswer);
@@ -78,8 +82,9 @@ function loadNextCard() {
 
 function showAnswer() {
   if (!currentCard) return;
+  const typeLabel = currentCard.phase === 'intro' ? `${cardTypeLabel(currentCard.type)} · New` : cardTypeLabel(currentCard.type);
   studyCard.innerHTML = `
-    <div class="card-type">${cardTypeLabel(currentCard.type)}</div>
+    <div class="card-type">${typeLabel}</div>
     ${renderPrompt(currentCard)}
     <div class="card-answer">${currentCard.answer}</div>
     <div class="card-actions">
@@ -94,53 +99,67 @@ function showAnswer() {
 function grade(correct) {
   if (!currentCard) return;
   answerCard(currentCard.id, correct);
+
+  const { streak, milestoneHit } = recordAnswer(correct);
+  if (milestoneHit) {
+    const result = generateIntroBatch(MILESTONE_EVERY);
+    milestoneMessageEl.textContent = result.ok
+      ? `🔥 ${streak} in a row! Added ${result.cardsAdded} new card${result.cardsAdded === 1 ? '' : 's'} across ${result.wordsAdded} word${result.wordsAdded === 1 ? '' : 's'} to learn.`
+      : `🔥 ${streak} in a row! Couldn't find any new words to add — you may have studied the whole dictionary.`;
+    refreshRecentWords();
+  }
+
   refreshStats();
   loadNextCard();
   scheduleSync();
 }
 
-addWordBtn.addEventListener('click', () => {
-  addWordBtn.disabled = true;
-  addWordResult.textContent = 'Picking a word…';
-  try {
-    const result = addRandomWord();
-    if (!result.ok) {
-      addWordResult.textContent = result.message;
-      return;
-    }
-    const rootsText = result.newRoots.join(', ');
-    addWordResult.textContent =
-      result.pickedWord === rootsText
-        ? `Added "${result.pickedWord}" (${result.cardsAdded} cards).`
-        : `Picked "${result.pickedWord}" → added root${
-            result.newRoots.length > 1 ? 's' : ''
-          } ${rootsText} (${result.cardsAdded} cards).`;
-    refreshStats();
-    refreshRecentWords();
-    loadNextCard();
-    scheduleSync();
-  } catch (err) {
-    addWordResult.textContent = `Error: ${err.message}`;
-  } finally {
-    addWordBtn.disabled = false;
+// With no manual "add a word" button, a brand-new install has zero cards
+// and no streak yet to trigger generating any — so if it's still empty
+// after we've had a chance to pull down any existing cloud data, seed a
+// first batch automatically.
+function bootstrapIfEmpty() {
+  if (getStats().totalCards > 0) return;
+  const result = generateIntroBatch(MILESTONE_EVERY);
+  if (result.ok) {
+    milestoneMessageEl.textContent = `Added ${result.cardsAdded} card${
+      result.cardsAdded === 1 ? '' : 's'
+    } across ${result.wordsAdded} word${result.wordsAdded === 1 ? '' : 's'} to get you started.`;
   }
-});
+  refreshStats();
+  refreshRecentWords();
+  loadNextCard();
+  scheduleSync();
+}
 
 (async function init() {
   studyCard.innerHTML = '<p class="card-empty">Loading dictionary&hellip;</p>';
-  addWordBtn.disabled = true;
   try {
     await loadDictionary();
   } catch (err) {
     studyCard.innerHTML = `<p class="card-empty">Failed to load dictionary: ${err.message}</p>`;
     return;
   }
-  addWordBtn.disabled = false;
   refreshStats();
   refreshRecentWords();
   loadNextCard();
   initSyncUI(syncPanelEl);
   startBackgroundSync();
+
+  let didBootstrapCheck = false;
+  function maybeBootstrap() {
+    if (didBootstrapCheck) return;
+    didBootstrapCheck = true;
+    bootstrapIfEmpty();
+  }
+
+  if (getSyncId()) {
+    // A device with sync configured might just be waiting on its first
+    // pull to find out it already has cards from elsewhere — don't seed
+    // until that first sync round has actually settled.
+  } else {
+    maybeBootstrap();
+  }
 
   // A background sync can pull in cards/words added on another device —
   // reflect that without yanking away a card mid-review.
@@ -150,6 +169,7 @@ addWordBtn.addEventListener('click', () => {
       refreshStats();
       refreshRecentWords();
       if (!currentCard) loadNextCard();
+      maybeBootstrap();
     }
     wasSyncing = status.state === 'syncing';
   });

@@ -14,6 +14,11 @@ const KEY_CARDS = 'scrabbleStudy.cards';
 
 const MAX_PICK_ATTEMPTS = 1000;
 
+/** New cards graduate out of the intensive "intro" rotation once they've
+ * been answered correctly this many times (matches the SM-2 scheduler's
+ * own first two learning steps — see js/srs.js). */
+const INTRO_GRADUATION_REPS = 2;
+
 function load(key, fallback) {
   const raw = localStorage.getItem(key);
   if (!raw) return fallback;
@@ -33,7 +38,8 @@ function getSelected() {
 }
 
 function getCards() {
-  return load(KEY_CARDS, []);
+  // Defensive default for cards persisted before `phase` existed.
+  return load(KEY_CARDS, []).map((c) => (c.phase ? c : { ...c, phase: 'review' }));
 }
 
 /** A card's identity is fully determined by what it's made of (root word,
@@ -44,7 +50,7 @@ function cardId(type, rootWord, prompt) {
   return [type, rootWord, prompt].join('␟');
 }
 
-function addRootToStudy(rootWord, viaWord, now, selected, cards) {
+function addRootToStudy(rootWord, viaWord, now, phase, selected, cards) {
   const specs = buildCardSpecs(rootWord);
   if (!specs) return 0;
 
@@ -67,6 +73,7 @@ function addRootToStudy(rootWord, viaWord, now, selected, cards) {
       last_reviewed_at: base.last_reviewed_at,
       created_at: nowIso,
       updated_at: nowIso,
+      phase,
     });
   }
   return specs.length;
@@ -74,40 +81,79 @@ function addRootToStudy(rootWord, viaWord, now, selected, cards) {
 
 /** Picks a uniformly-random word from the whole dictionary (root,
  * conjugated, or plural forms all equally likely), resolves it to its
- * root(s), and adds any not-yet-studied root(s) with their flashcards. */
-export function addRandomWord() {
-  const now = new Date();
-  const selected = getSelected();
-  const selectedSet = new Set(selected.map((s) => s.root_word));
-
+ * root(s), and adds any not-yet-studied root(s) — with their flashcards —
+ * to `selected`/`cards` (mutated in place). Returns how many cards were
+ * added, or 0 if the dictionary is exhausted of new words. */
+function addOneNewRootBatch(now, phase, selected, selectedSet, cards) {
   for (let attempt = 0; attempt < MAX_PICK_ATTEMPTS; attempt++) {
     const word = pickRandomWord();
     const roots = resolveRoots(word);
     const newRoots = roots.filter((r) => !selectedSet.has(r));
     if (newRoots.length === 0) continue;
 
-    const cards = getCards();
     let cardsAdded = 0;
     for (const root of newRoots) {
-      cardsAdded += addRootToStudy(root, word, now, selected, cards);
+      cardsAdded += addRootToStudy(root, word, now, phase, selected, cards);
+      selectedSet.add(root);
     }
-    save(KEY_SELECTED, selected);
-    save(KEY_CARDS, cards);
-    return { ok: true, pickedWord: word, roots, newRoots, cardsAdded };
+    return { pickedWord: word, roots, newRoots, cardsAdded };
   }
-  return { ok: false, message: `Could not find an unstudied word after ${MAX_PICK_ATTEMPTS} attempts.` };
+  return null;
 }
 
-export function getNextDue(limit = 1) {
-  const now = new Date().toISOString();
+/** Generates a fresh batch of at least `minCards` new flashcards (tagged
+ * for intensive "intro" drilling — see getNextCard) by repeatedly picking
+ * random words and building out their roots. Since a single root can
+ * produce several cards, `minCards` is a floor, not a ceiling: the batch
+ * always finishes out the root it's partway through rather than cutting
+ * a root's cards off mid-way. */
+export function generateIntroBatch(minCards = 50) {
+  const now = new Date();
+  const selected = getSelected();
+  const selectedSet = new Set(selected.map((s) => s.root_word));
   const cards = getCards();
-  const due = cards
-    .filter((c) => c.due_at <= now)
-    .sort((a, b) => (a.due_at < b.due_at ? -1 : a.due_at > b.due_at ? 1 : 0))
-    .slice(0, limit);
-  if (due.length > 0) return { due };
+
+  let cardsAdded = 0;
+  let wordsAdded = 0;
+  const roots = [];
+  while (cardsAdded < minCards) {
+    const result = addOneNewRootBatch(now, 'intro', selected, selectedSet, cards);
+    if (!result) break; // dictionary exhausted of unstudied words
+    cardsAdded += result.cardsAdded;
+    wordsAdded += result.newRoots.length;
+    roots.push(...result.newRoots);
+  }
+
+  save(KEY_SELECTED, selected);
+  save(KEY_CARDS, cards);
+  return { ok: cardsAdded > 0, cardsAdded, wordsAdded, roots };
+}
+
+/** The card to show next: any card still in its intensive "intro"
+ * rotation takes priority over everything else (least-recently-shown
+ * first), regardless of due date — that's what makes it intensive. Once
+ * there are no intro cards left, falls back to normal due-date-gated
+ * review. */
+export function getNextCard() {
+  const cards = getCards();
+
+  const intro = cards.filter((c) => c.phase === 'intro');
+  if (intro.length > 0) {
+    intro.sort((a, b) => {
+      const av = a.last_reviewed_at || '';
+      const bv = b.last_reviewed_at || '';
+      if (av !== bv) return av < bv ? -1 : 1;
+      return a.created_at < b.created_at ? -1 : 1;
+    });
+    return { card: intro[0], introRemaining: intro.length };
+  }
+
+  const now = new Date().toISOString();
+  const due = cards.filter((c) => c.due_at <= now).sort((a, b) => (a.due_at < b.due_at ? -1 : 1));
+  if (due.length > 0) return { card: due[0], introRemaining: 0 };
+
   const nextDueAt = cards.reduce((min, c) => (min === null || c.due_at < min ? c.due_at : min), null);
-  return { due: [], nextDueAt };
+  return { card: null, introRemaining: 0, nextDueAt };
 }
 
 export function answerCard(id, correct) {
@@ -121,6 +167,9 @@ export function answerCard(id, correct) {
     now
   );
   Object.assign(card, next, { updated_at: now.toISOString() });
+  if (card.phase === 'intro' && card.reps >= INTRO_GRADUATION_REPS) {
+    card.phase = 'review';
+  }
   save(KEY_CARDS, cards);
   return card;
 }
@@ -134,7 +183,8 @@ export function getStats() {
     dictionaryWordCount: wordCount(),
     selectedRootCount: getSelected().length,
     totalCards: cards.length,
-    dueNow: cards.filter((c) => c.due_at <= now).length,
+    dueNow: cards.filter((c) => c.due_at <= now && c.phase !== 'intro').length,
+    introducing: cards.filter((c) => c.phase === 'intro').length,
     cardsByType: byType,
   };
 }

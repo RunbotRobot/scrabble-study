@@ -24,8 +24,9 @@ generated:
    - **Word → Definition**
    - **Definition → Word**
    - **Jumble** — one per distinct conjugated/pluralized form of the
-     root, with the letters arranged in the fixed custom order
-     `QVUWGBFJYOPLKITMDCNHARZXES` (deterministic, not a random shuffle).
+     root that's 8 letters or shorter, with the letters arranged in the
+     fixed custom order `QVUWGBFJYOPLKITMDCNHARZXES` (deterministic, not
+     a random shuffle). Longer inflected forms don't get a jumble card.
    - A root with no dictionary definition on file (some newer Scrabble
      words only have a part of speech, no gloss) only gets jumble cards.
 4. This repeats — picking further words and building out their roots —

@@ -30,19 +30,46 @@ function refreshStats() {
   `;
 }
 
-function cardTypeLabel(type) {
-  if (type === 'word2def') return 'Word → Definition';
-  if (type === 'def2word') return 'Definition → Word';
-  if (type === 'jumble') return 'Jumble';
-  return type;
+function renderJumbleTiles(card) {
+  const tiles = [...card.prompt].map((ch) => `<span class="tile">${ch}</span>`).join('');
+  return `<div class="jumble-tiles">${tiles}</div>`;
 }
 
-function renderPrompt(card) {
-  if (card.type === 'jumble') {
-    const tiles = [...card.prompt].map((ch) => `<span class="tile">${ch}</span>`).join('');
-    return `<div class="jumble-tiles">${tiles}</div>`;
-  }
-  return `<div class="card-prompt">${card.prompt}</div>`;
+/** A fixed, content-independent placeholder standing in for a hidden
+ * answer. Deliberately not derived from the real text at all (not even
+ * via CSS blur on it) — same shape every time, so nothing about the
+ * actual word or definition (least of all its length) is visible before
+ * "Show answer". `kind` only picks a shape that reads as "a word" vs "a
+ * definition" in general, never anything about this specific answer. */
+function blurBlock(kind) {
+  const widths = kind === 'word' ? ['65%'] : ['100%', '55%'];
+  const lines = widths.map((w) => `<span class="blur-line" style="width:${w}"></span>`).join('');
+  return `<div class="blur-block" aria-label="hidden">${lines}</div>`;
+}
+
+/** word2def: the word is given, the definition is the (hidden) answer.
+ * def2word: the definition is given, the word is the (hidden) answer.
+ * Either way the word always renders on the left and the definition
+ * always renders on the right — that positioning is what tells you
+ * which kind of card this is, instead of a text label. */
+function renderWordDefCard(card, revealed) {
+  const wordGiven = card.type === 'word2def';
+  const word = wordGiven ? card.prompt : card.answer;
+  const definition = wordGiven ? card.answer : card.prompt;
+  const wordContent = revealed || wordGiven ? `<div class="wd-content">${word}</div>` : blurBlock('word');
+  const defContent = revealed || !wordGiven ? `<div class="wd-content">${definition}</div>` : blurBlock('definition');
+  return `
+    <div class="word-def-row">
+      <div class="wd-slot">
+        <div class="wd-label">Word</div>
+        ${wordContent}
+      </div>
+      <div class="wd-slot">
+        <div class="wd-label">Definition</div>
+        ${defContent}
+      </div>
+    </div>
+  `;
 }
 
 let currentCard = null;
@@ -57,11 +84,13 @@ function loadNextCard() {
     return;
   }
   currentCard = card;
-  const typeLabel =
-    card.phase === 'intro' ? `${cardTypeLabel(card.type)} · New (${introRemaining} left)` : cardTypeLabel(card.type);
+  const isJumble = card.type === 'jumble';
+  const typeLine = isJumble
+    ? `<div class="card-type">${card.phase === 'intro' ? `Jumble · New (${introRemaining} left)` : 'Jumble'}</div>`
+    : '';
   studyCard.innerHTML = `
-    <div class="card-type">${typeLabel}</div>
-    ${renderPrompt(card)}
+    ${typeLine}
+    ${isJumble ? renderJumbleTiles(card) : renderWordDefCard(card, false)}
     <button id="show-answer-btn" class="secondary">Show answer</button>
   `;
   document.getElementById('show-answer-btn').addEventListener('click', showAnswer);
@@ -69,11 +98,16 @@ function loadNextCard() {
 
 function showAnswer() {
   if (!currentCard) return;
-  const typeLabel = currentCard.phase === 'intro' ? `${cardTypeLabel(currentCard.type)} · New` : cardTypeLabel(currentCard.type);
+  const isJumble = currentCard.type === 'jumble';
+  const typeLine = isJumble
+    ? `<div class="card-type">${currentCard.phase === 'intro' ? 'Jumble · New' : 'Jumble'}</div>`
+    : '';
+  const body = isJumble
+    ? `${renderJumbleTiles(currentCard)}<div class="card-answer">${currentCard.answer}</div>`
+    : renderWordDefCard(currentCard, true);
   studyCard.innerHTML = `
-    <div class="card-type">${typeLabel}</div>
-    ${renderPrompt(currentCard)}
-    <div class="card-answer">${currentCard.answer}</div>
+    ${typeLine}
+    ${body}
     <div class="card-actions">
       <button class="grade-incorrect">Got it wrong</button>
       <button class="grade-correct">Got it right</button>

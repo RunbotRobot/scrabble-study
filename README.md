@@ -21,14 +21,17 @@ generated:
    measure — *and* the verb form of `BE`), and a plural/invariant word
    like `CATTLE` is simply its own root.
 3. For each newly-discovered root, three kinds of flashcards are created:
-   - **Word → Definition**
-   - **Definition → Word**
+   - **Word → Definition** and **Definition → Word** — only for roots 8
+     letters or shorter. Longer roots skip these two entirely.
    - **Jumble** — one per distinct conjugated/pluralized form of the
      root that's 8 letters or shorter, with the letters arranged in the
      fixed custom order `QVUWGBFJYOPLKITMDCNHARZXES` (deterministic, not
      a random shuffle). Longer inflected forms don't get a jumble card.
    - A root with no dictionary definition on file (some newer Scrabble
      words only have a part of speech, no gloss) only gets jumble cards.
+     A root longer than 8 letters with no short inflections either ends
+     up contributing no cards at all — it's still recorded as selected,
+     it just has nothing to quiz.
 4. This repeats — picking further words and building out their roots —
    until the batch has at least 50 cards. Because a single root can
    produce a handful of cards, 50 is a floor, not a ceiling: the root
@@ -49,15 +52,28 @@ of new cards (see above).
 A freshly-generated batch is drilled intensively: while any of its cards
 haven't yet been answered correctly twice, they take over the study queue
 entirely (cycled round-robin, ignoring normal spaced-repetition due
-dates) ahead of anything else due for review. Once a card's had two
-correct answers, it graduates into the normal spaced-repetition rotation
-like any other card, and once every card in the batch has graduated, due
-reviews resume as normal.
+dates) ahead of anything else due for review, and the *next* card is
+picked at random among however many are equally "least recently seen" —
+not, say, always the word→definition card immediately followed by its
+own definition→word twin, which would make the second one trivial. Once
+a card's had two correct answers, it graduates into the normal
+spaced-repetition rotation like any other card, and once every card in
+the batch has graduated, due reviews resume as normal.
 
 The very first batch, before you've ever gotten anything right to build a
 streak with, is seeded automatically the first time the app has zero
 cards (after giving cloud sync, if configured, a chance to pull down
 existing progress first).
+
+## Card presentation
+
+Word↔definition cards always show a **Word** column on the left and a
+**Definition** column on the right, regardless of which one is the
+question and which is the answer — that positioning *is* the signal for
+which kind of card it is, instead of a text label. Whichever side is the
+answer is hidden behind a fixed, generic placeholder (not a CSS blur
+filter over the real text, which would still leak its length/shape) —
+you find out what's actually there by tapping "Show answer" like normal.
 
 ## Spaced repetition
 

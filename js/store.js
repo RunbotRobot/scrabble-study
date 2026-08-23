@@ -144,13 +144,21 @@ export function getNextCard() {
 
   const intro = cards.filter((c) => c.phase === 'intro');
   if (intro.length > 0) {
-    intro.sort((a, b) => {
-      const av = a.last_reviewed_at || '';
-      const bv = b.last_reviewed_at || '';
-      if (av !== bv) return av < bv ? -1 : 1;
-      return a.created_at < b.created_at ? -1 : 1;
-    });
-    return { card: intro[0], introRemaining: intro.length };
+    // Least-recently-reviewed first (nulls — never reviewed — sort
+    // first), but pick uniformly at random *among* whichever cards tie
+    // for that spot. Within a freshly-generated batch every card ties
+    // (all null), so without this a word->definition card and its
+    // definition->word twin — built back to back, so otherwise
+    // identical on every tiebreak — would always land adjacent, making
+    // the second one trivial since you'd have just seen the first.
+    let oldest = null;
+    for (const c of intro) {
+      const key = c.last_reviewed_at || '';
+      if (oldest === null || key < oldest) oldest = key;
+    }
+    const candidates = intro.filter((c) => (c.last_reviewed_at || '') === oldest);
+    const card = candidates[Math.floor(Math.random() * candidates.length)];
+    return { card, introRemaining: intro.length };
   }
 
   const now = new Date().toISOString();

@@ -4,10 +4,14 @@ import { jumble } from './jumble.js';
 /** No jumble cards for inflected forms longer than this many letters. */
 const MAX_JUMBLE_LENGTH = 8;
 
+/** No word<->definition cards for roots longer than this many letters. */
+const MAX_DEFINITION_ROOT_LENGTH = 8;
+
 /** Builds the flashcard specs for a root word: a word->definition card,
- * a definition->word card, and one jumble card per distinct conjugated /
- * pluralized form (up to MAX_JUMBLE_LENGTH letters) listed across all of
- * the root's senses.
+ * a definition->word card (both only for roots up to
+ * MAX_DEFINITION_ROOT_LENGTH letters), and one jumble card per distinct
+ * conjugated/pluralized form (up to MAX_JUMBLE_LENGTH letters) listed
+ * across all of the root's senses.
  *
  * Returns null if `rootWord` isn't actually a root (has no real senses).
  */
@@ -24,7 +28,7 @@ export function buildCardSpecs(rootWord) {
   }
 
   const specs = [];
-  if (definitionText) {
+  if (definitionText && rootWord.length <= MAX_DEFINITION_ROOT_LENGTH) {
     specs.push({ type: 'word2def', prompt: rootWord, answer: definitionText });
     specs.push({ type: 'def2word', prompt: definitionText, answer: rootWord });
   }

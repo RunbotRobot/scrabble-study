@@ -210,20 +210,45 @@ function showAnswer() {
   studyCard.querySelector('.grade-incorrect').addEventListener('click', () => grade(false));
 }
 
+function showMilestoneMessage(text, isError = false) {
+  milestoneMessageEl.textContent = text;
+  milestoneMessageEl.classList.toggle('milestone-message-error', isError);
+}
+
+/** Grading can throw or come back empty in ways a click handler would
+ * otherwise swallow silently (e.g. this exact card's id no longer
+ * exists in local storage — nothing left for the UI to visibly get
+ * stuck on, so "Got it right/wrong" would just look like it did
+ * nothing). Surface that instead of failing silently, and recover by
+ * loading whatever card *does* exist rather than leaving the answered
+ * card frozen on screen. */
 function grade(correct) {
   if (!currentCard) return;
-  const { mistakeBatch } = answerCard(currentCard.id, correct);
+  try {
+    const result = answerCard(currentCard.id, correct);
+    if (!result) {
+      throw new Error(`card ${currentCard.id} no longer exists locally`);
+    }
+    const { mistakeBatch } = result;
 
-  const { streak, milestoneHit } = recordAnswer(correct);
-  if (milestoneHit) {
-    const result = generateIntroBatch(MILESTONE_EVERY);
-    milestoneMessageEl.textContent = result.ok
-      ? `🔥 ${streak} in a row! Added ${result.cardsAdded} new card${result.cardsAdded === 1 ? '' : 's'} across ${result.wordsAdded} word${result.wordsAdded === 1 ? '' : 's'} to learn.`
-      : `🔥 ${streak} in a row! Couldn't find any new words to add — you may have studied the whole dictionary.`;
-  } else if (mistakeBatch) {
-    milestoneMessageEl.textContent = `📌 ${mistakeBatch.cardCount} recently-missed card${
-      mistakeBatch.cardCount === 1 ? '' : 's'
-    } — let's drill ${mistakeBatch.cardCount === 1 ? 'it' : 'them'} intensively.`;
+    const { streak, milestoneHit } = recordAnswer(correct);
+    if (milestoneHit) {
+      const batchResult = generateIntroBatch(MILESTONE_EVERY);
+      showMilestoneMessage(
+        batchResult.ok
+          ? `🔥 ${streak} in a row! Added ${batchResult.cardsAdded} new card${batchResult.cardsAdded === 1 ? '' : 's'} across ${batchResult.wordsAdded} word${batchResult.wordsAdded === 1 ? '' : 's'} to learn.`
+          : `🔥 ${streak} in a row! Couldn't find any new words to add — you may have studied the whole dictionary.`
+      );
+    } else if (mistakeBatch) {
+      showMilestoneMessage(
+        `📌 ${mistakeBatch.cardCount} recently-missed card${
+          mistakeBatch.cardCount === 1 ? '' : 's'
+        } — let's drill ${mistakeBatch.cardCount === 1 ? 'it' : 'them'} intensively.`
+      );
+    }
+  } catch (err) {
+    console.error('Grading failed:', err);
+    showMilestoneMessage(`⚠️ Couldn't record that answer (${err.message}). Try reloading the page.`, true);
   }
 
   refreshStats();
@@ -246,6 +271,26 @@ function bootstrapIfEmpty() {
   loadNextCard();
   scheduleSync();
 }
+
+// ES modules never hot-reload — a tab left open across a deploy keeps
+// running whatever code was current when it loaded, no matter how long
+// that's been, since nothing about normal use ever re-fetches app.js.
+// A stale-enough copy isn't just "missing a feature": card ids and data
+// shapes can drift from what current code (and the synced server data)
+// expects, breaking things in ways that look like silent no-ops rather
+// than an obvious error. Reloading periodically bounds how stale a
+// long-lived tab can get; only when the tab is actually in the
+// foreground, so it can't interrupt a session no one's looking at.
+const RELOAD_AFTER_MS = 12 * 60 * 60 * 1000;
+const pageLoadedAt = Date.now();
+setInterval(
+  () => {
+    if (!document.hidden && Date.now() - pageLoadedAt > RELOAD_AFTER_MS) {
+      location.reload();
+    }
+  },
+  30 * 60 * 1000
+);
 
 (async function init() {
   studyCard.innerHTML = '<p class="card-empty">Loading dictionary&hellip;</p>';

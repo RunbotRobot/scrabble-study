@@ -137,6 +137,8 @@ button.secondary {
 
 .milestone-message:empty { display: none; }
 
+.milestone-message-error { color: var(--bad); }
+
 .card {
   min-height: 160px;
   display: flex;

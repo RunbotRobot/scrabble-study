@@ -109,11 +109,16 @@ export function initLookupUI(buttonEl, modalRootEl) {
     const addBtn = modalRootEl.querySelector('#lookup-add-btn');
     if (addBtn) {
       addBtn.addEventListener('click', () => {
-        const result = queueWord(word);
-        if (result.ok) scheduleSync();
-        message = result.ok
-          ? `Queued ${result.word} — it'll be added next time we earn more words.`
-          : result.message;
+        try {
+          const result = queueWord(word);
+          if (result.ok) scheduleSync();
+          message = result.ok
+            ? `Queued ${result.word} — it'll be added next time we earn more words.`
+            : result.message;
+        } catch (err) {
+          console.error('Queueing word failed:', err);
+          message = `⚠️ Couldn't queue that word (${err.message}). Try reloading the page.`;
+        }
         refresh(word);
       });
     }

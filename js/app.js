@@ -5,6 +5,7 @@ import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
 import { imageUrlFor } from './images.js';
+import { imageSubjectFor } from './dictionary.js';
 
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
@@ -44,6 +45,31 @@ function refreshStats() {
 function renderJumbleTiles(card) {
   const tiles = [...card.prompt].map((ch) => `<span class="tile">${ch}</span>`).join('');
   return `<div class="jumble-tiles">${tiles}</div>`;
+}
+
+/** One illustration per distinct root among a jumble's deck solutions —
+ * a jumble with several valid answers (e.g. STOP/POTS/SPOT/TOPS/OPTS)
+ * genuinely depicts several different things, so it gets several
+ * pictures, not just one for the card's own answer. Solutions that are
+ * inflected forms of the same root (rather than roots of their own)
+ * collapse onto that root's single shared image. */
+function renderJumbleImages(card) {
+  const seenRoots = new Set();
+  const subjects = [];
+  for (const word of getDeckAnagramSolutions(card.prompt)) {
+    const subject = imageSubjectFor(word);
+    if (!subject || seenRoots.has(subject.root)) continue;
+    seenRoots.add(subject.root);
+    subjects.push(subject);
+  }
+  if (subjects.length === 0) return '';
+  const imgs = subjects
+    .map(
+      ({ root, definition }) =>
+        `<img class="wd-image" src="${imageUrlFor(root, definition)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+    )
+    .join('');
+  return `<div class="jumble-images">${imgs}</div>`;
 }
 
 /** The small label above a card, if any — only needed for card types that
@@ -143,7 +169,7 @@ function renderEndingsCard(card, revealed) {
 function renderCardBody(card, revealed) {
   if (card.type === 'jumble') {
     return revealed
-      ? `${renderJumbleTiles(card)}<div class="card-answer answer-highlight">${getDeckAnagramSolutions(card.prompt).join(', ')}</div>`
+      ? `${renderJumbleTiles(card)}<div class="card-answer answer-highlight">${getDeckAnagramSolutions(card.prompt).join(', ')}</div>${renderJumbleImages(card)}`
       : renderJumbleTiles(card);
   }
   if (card.type === 'endings') return renderEndingsCard(card, revealed);
@@ -154,7 +180,7 @@ let currentCard = null;
 let currentIntroRemaining = 0;
 
 function loadNextCard() {
-  const { card, introRemaining } = getNextCard();
+  const { card, introRemaining } = getNextCard(currentCard ? currentCard.id : null);
   if (!card) {
     currentCard = null;
     studyCard.innerHTML = '<p class="card-empty">No cards yet.</p>';

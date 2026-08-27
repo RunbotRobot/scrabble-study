@@ -208,6 +208,24 @@ button.secondary {
   border: 1px solid var(--border);
 }
 
+/* A jumble can have several valid solutions, each with its own picture
+   — laid out in a wrapping row rather than stacked, so they read as a
+   set of options instead of one long column. */
+.jumble-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+  width: 100%;
+  margin-top: 0.4rem;
+}
+
+.jumble-images .wd-image {
+  width: 110px;
+  max-width: 110px;
+  margin-top: 0;
+}
+
 /* Marks whichever side of a card was the hidden answer, once revealed —
    so it's visually obvious which piece you were asked to produce and
    which was given. */

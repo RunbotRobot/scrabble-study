@@ -282,17 +282,9 @@ function reviewPriority(card, nowMs) {
   return overdueRatio + difficulty;
 }
 
-/** The card to show next: any card still in its intensive "intro"
- * rotation takes priority over everything else (least-recently-shown
- * first), regardless of due date — that's what makes it intensive. Once
- * there are no intro cards left, the highest-priority graduated
- * ("review"-phase) card is shown (see reviewPriority) — there's no
- * due-date gate, so this only comes back empty if there are truly no
- * cards at all (or every card is 'held' in the recently-missed pile —
- * see answerCard — which this deliberately never selects). */
-export function getNextCard() {
-  const cards = getCards().filter((c) => !c.deleted);
-
+/** Picks one card from `cards` using the usual intro-first, then
+ * weighted-review selection — or null if there's nothing to show. */
+function pickNext(cards) {
   const intro = cards.filter((c) => c.phase === 'intro');
   if (intro.length > 0) {
     // Least-recently-reviewed first (nulls — never reviewed — sort
@@ -308,15 +300,37 @@ export function getNextCard() {
       if (oldest === null || key < oldest) oldest = key;
     }
     const candidates = intro.filter((c) => (c.last_reviewed_at || '') === oldest);
-    const card = candidates[Math.floor(Math.random() * candidates.length)];
-    return { card, introRemaining: intro.length };
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
   const reviewPool = cards.filter((c) => c.phase === 'review');
-  if (reviewPool.length === 0) return { card: null, introRemaining: 0 };
+  if (reviewPool.length === 0) return null;
+  return pickWeightedByPriority(reviewPool, Date.now());
+}
 
-  const nowMs = Date.now();
-  return { card: pickWeightedByPriority(reviewPool, nowMs), introRemaining: 0 };
+/** The card to show next: any card still in its intensive "intro"
+ * rotation takes priority over everything else (least-recently-shown
+ * first), regardless of due date — that's what makes it intensive. Once
+ * there are no intro cards left, the highest-priority graduated
+ * ("review"-phase) card is shown (see reviewPriority) — there's no
+ * due-date gate, so this only comes back empty if there are truly no
+ * cards at all (or every card is 'held' in the recently-missed pile —
+ * see answerCard — which this deliberately never selects).
+ *
+ * `previousId`, when given, is excluded from consideration as long as
+ * something else is available. Without this, a card that's the sole (or
+ * tied-oldest) remaining intro card gets picked right back as "the next
+ * card" the instant you miss it — a miss resets its reps to 0, so it
+ * never graduates out, and it looks exactly like grading it wrong did
+ * nothing at all. Falls back to including it anyway if it's genuinely
+ * the only card left to show. */
+export function getNextCard(previousId) {
+  const cards = getCards().filter((c) => !c.deleted);
+  const introRemaining = cards.filter((c) => c.phase === 'intro').length;
+
+  const pool = previousId ? cards.filter((c) => c.id !== previousId) : cards;
+  const card = pickNext(pool) || pickNext(cards);
+  return { card, introRemaining: card && card.phase === 'intro' ? introRemaining : 0 };
 }
 
 /** Picks one card at random, weighted toward higher priority — as

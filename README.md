@@ -120,6 +120,14 @@ intro-phase cards don't feed this pile — they're already getting
 intensive round-robin drilling (see above), so folding them in here too
 would be redundant.
 
+The next card shown never repeats the one you were just graded on, as
+long as any other card exists to show instead. Without that, a card that
+was the sole (or tied-oldest) remaining intro card would get picked right
+back as "the next card" the instant you missed it — a miss resets its
+reps to 0, so it never graduates out of intro on its own — and looping
+back to the exact same question over and over reads exactly like grading
+it wrong isn't doing anything, even though it is.
+
 ## Card presentation
 
 Word↔definition cards always show a **Word** column on the left and a
@@ -177,20 +185,33 @@ many solutions exist, and "Show answer" lists all of them, each also in
 valuegram order — but only the ones that are actually in your deck (i.e.
 you have a jumble card for that exact word). The dictionary usually has
 more anagram solutions than that; the rest aren't shown, since they're
-not something you're being asked to already know.
+not something you're being asked to already know. On "Show answer", each
+distinct root among the deck's solutions gets its own illustration (see
+"Root word images" below) laid out in a row — a jumble with several
+valid answers genuinely depicts several different things, so a solution
+that's an inflected form of another solution's root (rare, since the two
+would need identical letters) collapses onto that root's one shared
+picture instead of generating its own.
 
 ## Root word images
 
 Each root with a definition gets a small illustration generated from
 that definition — shown on word2def/def2word cards (see "Card
-presentation" above) and in the lookup panel. Images are free to
-generate (via [Pollinations.ai](https://pollinations.ai), which needs no
-API key) and shared globally rather than per-device: the worker's `GET
-/image/:word` endpoint generates an image on the first request for a
-given word and caches it in Cloudflare R2 forever after, so every device
-— and every other word that happens to share a root — benefits from that
-one generation. Roots with no definition on file don't get an image;
-there's nothing meaningful to illustrate.
+presentation" above), on jumble cards (see above), and in the lookup
+panel. Images are free to generate (via
+[Pollinations.ai](https://pollinations.ai), which needs no API key) and
+shared globally rather than per-device: the worker's `GET /image/:word`
+endpoint generates an image on the first request for a given word and
+caches it in Cloudflare R2 forever after, so every device — and every
+other word that happens to share a root — benefits from that one
+generation. Roots with no definition on file don't get an image; there's
+nothing meaningful to illustrate. The generation prompt pairs the word
+with its definition rather than sending the bare definition alone — a
+gloss like "to find fault incessantly" (`NAG`) is abstract enough on its
+own that the model has nothing concrete to anchor on, so it can come out
+looking unrelated to the word entirely. If a generated image still turns
+out nonsensical, `DELETE /image/:word` evicts the cached copy so the next
+view regenerates it.
 
 Pollinations alone can't keep up with a 50-word batch (it rate-limits
 bursts). A Gemini API fallback for exactly that case was investigated

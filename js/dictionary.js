@@ -74,6 +74,26 @@ export function wordExists(word) {
   return Boolean(words[word]);
 }
 
+/** The { root, definition } an illustration for `word` should be
+ * generated/cached under — always the root's own image, never a
+ * separate one per inflected form, so e.g. MACULAS and MACULAE (both
+ * inflections of MACULA) share MACULA's picture instead of each
+ * generating their own. Returns null if `word` has no root with a real
+ * definition to draw from. */
+export function imageSubjectFor(word) {
+  const roots = resolveRoots(word);
+  const root = roots[0];
+  if (!root) return null;
+  const senses = getRootSenses(root);
+  if (!senses) return null;
+  const definition = senses
+    .map((s) => s.definition)
+    .filter(Boolean)
+    .join(' / ');
+  if (!definition) return null;
+  return { root, definition };
+}
+
 function buildAnagramIndex() {
   anagramIndex = new Map();
   for (const w of wordList) {

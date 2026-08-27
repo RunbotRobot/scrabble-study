@@ -36,6 +36,10 @@
  * word's definition, supplied by the client) and stores it in R2 before
  * returning it, so every word is generated at most once, ever.
  *
+ * Third endpoint, DELETE /image/:word — evicts a word's cached image
+ * (no-op if there wasn't one) so the next GET regenerates it. For when a
+ * generated image turns out nonsensical and is worth a second roll.
+ *
  * (A Gemini API fallback for when Pollinations is rate-limited was
  * investigated and pulled back out — as of this writing, every
  * image-capable Gemini model reports a free-tier request limit of 0;
@@ -50,7 +54,7 @@ const MAX_ROWS_PER_PUSH = 1000;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-Sync-Id',
 };
 
@@ -274,6 +278,18 @@ async function handleImage(request, env, word) {
   return new Response(generated.bytes, { headers: { 'Content-Type': generated.contentType, ...IMAGE_CACHE_HEADERS } });
 }
 
+/** Evicts a word's cached image so the next GET regenerates it — for
+ * when a generated image turns out nonsensical (e.g. a vague/abstract
+ * definition produced something unrelated) and is worth a second try,
+ * typically with a better prompt. */
+async function handleImageDelete(env, word) {
+  if (!WORD_RE.test(word)) {
+    return json({ error: 'Invalid word' }, 400);
+  }
+  await env.IMAGES.delete(`${word}.jpg`);
+  return json({ ok: true });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -294,6 +310,13 @@ export default {
     if (imageMatch && request.method === 'GET') {
       try {
         return await handleImage(request, env, decodeURIComponent(imageMatch[1]));
+      } catch (err) {
+        return json({ error: `Internal error: ${err.message}` }, 500);
+      }
+    }
+    if (imageMatch && request.method === 'DELETE') {
+      try {
+        return await handleImageDelete(env, decodeURIComponent(imageMatch[1]));
       } catch (err) {
         return json({ error: `Internal error: ${err.message}` }, 500);
       }

@@ -333,10 +333,16 @@ hundreds of KB — nowhere near a normal browser's multi-MB quota. So a
 something about the browser/device itself (private browsing and a full
 device are the two most common causes, but not the only ones). The
 error message skips the generic "try reloading" advice other failures
-get, since reloading fixes none of those, and — where the browser
-supports `navigator.storage.estimate()` — appends the browser's own
-actual usage-vs-quota numbers a moment later, since guessing further at
-the cause isn't as useful as just reading it off the browser directly.
+get, since reloading fixes none of those, and appends two things a
+moment/character later: `localStorage`'s own actual usage (summed
+across every key at this origin, not just this app's) at the moment of
+the failure, and — where the browser supports it —
+`navigator.storage.estimate()`'s usage-vs-quota numbers. The latter is
+**not** the same budget as `localStorage`'s: Chrome enforces its own,
+separate, much smaller quota for `localStorage` specifically that
+`estimate()` doesn't report at all (it covers IndexedDB/Cache API, a
+different storage bucket), so a large "allowed" figure there doesn't
+rule out `localStorage` itself being the thing that's constrained.
 
 Two things are intentionally **not** synced, since they're per-device
 session bookkeeping rather than study data: your current correct-answer

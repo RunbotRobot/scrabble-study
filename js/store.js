@@ -58,6 +58,26 @@ export async function describeStorageQuota() {
   }
 }
 
+/** Total bytes (UTF-16 code units, close enough for the ~all-ASCII data
+ * this app stores) currently sitting in this origin's localStorage,
+ * across every key — not just this app's own, in case something else
+ * ever shares the origin. The number that actually matters for
+ * diagnosing a quota error, since localStorage has its own quota
+ * separate from (and not reported by) navigator.storage.estimate() —
+ * see describeStorageQuota. null if it can't be read for some reason. */
+function localStorageUsageBytes() {
+  try {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      total += k.length + (localStorage.getItem(k) || '').length;
+    }
+    return total;
+  } catch {
+    return null;
+  }
+}
+
 /** This app's own data (cards, selected words, streak, sync id) never
  * exceeds a few hundred KB even after months of use — nowhere near a
  * normal browser's localStorage quota, which is typically several MB.
@@ -65,16 +85,20 @@ export async function describeStorageQuota() {
  * consuming the origin's storage budget, or the browser is enforcing an
  * unusually small one (private browsing is the most common case, but
  * not the only one) — so the fix isn't "write less," it's surfacing
- * what's going on (see describeStorageQuota) instead of the generic
- * "reload the page" advice other failures get, which does nothing
- * here. */
+ * what's going on (see describeStorageQuota, localStorageUsageBytes)
+ * instead of the generic "reload the page" advice other failures get,
+ * which does nothing here. */
 function save(key, value) {
+  const serialized = JSON.stringify(value);
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key, serialized);
   } catch (err) {
     if (isQuotaExceededError(err)) {
+      const existing = localStorageUsageBytes();
+      const kb = (n) => (n / 1024).toFixed(1);
+      const existingText = existing === null ? 'an unreadable amount' : `~${kb(existing)} KB`;
       const wrapped = new Error(
-        "your browser is blocking storage here — this app's own data is far too small to hit a normal quota, so something else about this browser/device is restricting it"
+        `your browser is blocking storage here — this write was only ~${kb(serialized.length)} KB, and everything already stored for this site totals ${existingText}, far too small to hit a normal quota, so something else about this browser/device is restricting it`
       );
       wrapped.quotaExceeded = true;
       throw wrapped;

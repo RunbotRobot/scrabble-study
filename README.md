@@ -193,18 +193,19 @@ one generation. Roots with no definition on file don't get an image;
 there's nothing meaningful to illustrate.
 
 Pollinations alone can't keep up with a 50-word batch (it rate-limits
-bursts), so the worker falls back to the Gemini API's free tier when
-Pollinations fails, if a `GEMINI_API_KEY` is configured. Without one,
-image generation just keeps working through Pollinations alone — the
-fallback is purely additive. To enable it:
-
-1. Go to [Google AI Studio](https://aistudio.google.com/apikey) and
-   create an API key — free, no credit card required.
-2. This repo's GitHub **Settings → Secrets and variables → Actions**,
-   add a repository secret named `GEMINI_API_KEY` with that key.
-3. Push (or re-run the `Deploy sync worker` workflow) — it sets the key
-   as a Worker secret automatically. Leaving the secret unset (or
-   deleting it) just goes back to Pollinations-only.
+bursts). A Gemini API fallback for exactly that case was investigated
+and built, then pulled back out: every image-capable Gemini model
+(`gemini-3.1-flash-lite-image`, `gemini-2.5-flash-image`, ...) reports a
+**free-tier request limit of 0** — confirmed directly against a real key
+via the API's own error responses. Text-only Gemini models work fine on
+the same key's free tier; image *output* specifically requires a billed
+Google Cloud project right now, not just an API key, so it wasn't the
+free option it looked like on paper. The deploy workflow still wires a
+`GEMINI_API_KEY` repo secret into the worker if one's set (see
+`.github/workflows/deploy-worker.yml`), in case Google's free tier for
+image models changes — but nothing currently reads it. Until then,
+rate-limited words just fill in the next time they're requested, same as
+any cache miss.
 
 ## Options panel and looking up a word
 

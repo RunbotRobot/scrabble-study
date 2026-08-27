@@ -34,11 +34,14 @@
  * flowers" for HAKU is the same picture for everyone). On a cache miss,
  * generates one via Pollinations.ai (free, keyless) using `prompt` (the
  * word's definition, supplied by the client) and stores it in R2 before
- * returning it, so every word is generated at most once, ever. If
- * Pollinations fails (e.g. rate-limited during a large batch), falls
- * back to the Gemini API's free tier — only when the GEMINI_API_KEY
- * secret is configured; otherwise this fallback is silently skipped and
- * Pollinations remains the only generator, exactly as before.
+ * returning it, so every word is generated at most once, ever.
+ *
+ * (A Gemini API fallback for when Pollinations is rate-limited was
+ * investigated and pulled back out — as of this writing, every
+ * image-capable Gemini model reports a free-tier request limit of 0;
+ * image generation there currently requires a billed project, not just
+ * an API key. GEMINI_API_KEY is still wired up as a Worker secret via
+ * the deploy workflow — see README — in case that changes.)
  */
 
 const SYNC_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -238,8 +241,7 @@ const IMAGE_CACHE_HEADERS = {
   ...CORS_HEADERS,
 };
 
-/** Free, keyless, always tried first. Returns null (never throws) on any
- * failure so the caller can fall through to generateWithGemini. */
+/** Free, keyless. Returns null (never throws) on any failure. */
 async function generateWithPollinations(prompt) {
   try {
     const genUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`;
@@ -248,79 +250,6 @@ async function generateWithPollinations(prompt) {
     return { bytes: await res.arrayBuffer(), contentType: 'image/jpeg' };
   } catch {
     return null;
-  }
-}
-
-/** Fallback for when Pollinations is rate-limited — a second free-tier
- * quota to draw on, e.g. during a 50-word batch that outpaces
- * Pollinations alone. Only attempted when env.GEMINI_API_KEY is
- * configured (a Cloudflare Worker secret — see README); returns null
- * (never throws) on any failure, including an unset key, so it's always
- * safe to call. */
-async function generateWithGemini(prompt, apiKey) {
-  if (!apiKey) return null;
-  try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        model: 'gemini-3.1-flash-lite-image',
-        input: [{ type: 'text', text: prompt }],
-      }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const image = data.output_image;
-    if (!image || !image.data) return null;
-    const binary = atob(image.data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return { bytes: bytes.buffer, contentType: image.mime_type || 'image/png' };
-  } catch {
-    return null;
-  }
-}
-
-/** Temporary diagnostic aid (see ?debug=1[&model=...][&legacy=1]) —
- * repeats the Gemini call without swallowing the error, so a failure can
- * actually be seen instead of just falling through to a generic 502.
- * `legacy=1` tries the older generateContent endpoint instead of the
- * newer Interactions API, for comparing which one (and which model) has
- * an actual free-tier quota. */
-async function debugGemini(prompt, apiKey, model, legacy, textOnly) {
-  if (!apiKey) return { configured: false };
-  try {
-    if (legacy) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            textOnly
-              ? { contents: [{ parts: [{ text: prompt }] }] }
-              : {
-                  contents: [{ parts: [{ text: prompt }] }],
-                  generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-                }
-          ),
-        }
-      );
-      const bodyText = await res.text();
-      return { configured: true, endpoint: 'generateContent', model, status: res.status, body: bodyText.slice(0, 1500) };
-    }
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        model,
-        input: [{ type: 'text', text: prompt }],
-      }),
-    });
-    const bodyText = await res.text();
-    return { configured: true, endpoint: 'interactions', model, status: res.status, body: bodyText.slice(0, 1500) };
-  } catch (err) {
-    return { configured: true, exception: String(err) };
   }
 }
 
@@ -337,18 +266,9 @@ async function handleImage(request, env, word) {
   }
 
   const prompt = new URL(request.url).searchParams.get('prompt') || word;
-  const params = new URL(request.url).searchParams;
-  if (params.get('debug') === '1') {
-    const model = params.get('model') || 'gemini-3.1-flash-lite-image';
-    const legacy = params.get('legacy') === '1';
-    const textOnly = params.get('textonly') === '1';
-    const gemini = await debugGemini(prompt, env.GEMINI_API_KEY, model, legacy, textOnly);
-    return json({ gemini });
-  }
-  const generated =
-    (await generateWithPollinations(prompt)) || (await generateWithGemini(prompt, env.GEMINI_API_KEY));
+  const generated = await generateWithPollinations(prompt);
   if (!generated) {
-    return json({ error: 'Image generation failed (all providers)' }, 502);
+    return json({ error: 'Image generation failed' }, 502);
   }
   await env.IMAGES.put(key, generated.bytes, { httpMetadata: { contentType: generated.contentType } });
   return new Response(generated.bytes, { headers: { 'Content-Type': generated.contentType, ...IMAGE_CACHE_HEADERS } });

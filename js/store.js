@@ -58,21 +58,26 @@ export async function describeStorageQuota() {
   }
 }
 
-/** Total bytes (UTF-16 code units, close enough for the ~all-ASCII data
- * this app stores) currently sitting in this origin's localStorage,
- * across every key — not just this app's own, in case something else
- * ever shares the origin. The number that actually matters for
+/** Every key currently in this origin's localStorage — not just this
+ * app's own, in case something else ever shares the origin — with its
+ * size in bytes (UTF-16 code units, close enough for the ~all-ASCII
+ * data this app stores), largest first, plus the total. The number
+ * (and, critically, the breakdown) that actually matters for
  * diagnosing a quota error, since localStorage has its own quota
  * separate from (and not reported by) navigator.storage.estimate() —
  * see describeStorageQuota. null if it can't be read for some reason. */
-function localStorageUsageBytes() {
+function localStorageBreakdown() {
   try {
+    const entries = [];
     let total = 0;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      total += k.length + (localStorage.getItem(k) || '').length;
+      const bytes = k.length + (localStorage.getItem(k) || '').length;
+      total += bytes;
+      entries.push({ key: k, bytes });
     }
-    return total;
+    entries.sort((a, b) => b.bytes - a.bytes);
+    return { total, entries };
   } catch {
     return null;
   }
@@ -94,9 +99,16 @@ function save(key, value) {
     localStorage.setItem(key, serialized);
   } catch (err) {
     if (isQuotaExceededError(err)) {
-      const existing = localStorageUsageBytes();
+      const breakdown = localStorageBreakdown();
       const kb = (n) => (n / 1024).toFixed(1);
-      const existingText = existing === null ? 'an unreadable amount' : `~${kb(existing)} KB`;
+      let existingText = 'an unreadable amount';
+      if (breakdown) {
+        const top = breakdown.entries
+          .slice(0, 4)
+          .map((e) => `${e.key}: ${kb(e.bytes)} KB`)
+          .join(', ');
+        existingText = `~${kb(breakdown.total)} KB total (largest: ${top})`;
+      }
       const wrapped = new Error(
         `your browser is blocking storage here — this write was only ~${kb(serialized.length)} KB, and everything already stored for this site totals ${existingText}, far too small to hit a normal quota, so something else about this browser/device is restricting it`
       );

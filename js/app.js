@@ -4,7 +4,7 @@ import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
-import { imageUrlFor } from './images.js';
+import { imageHtmlFor } from './images.js';
 import { imageSubjectFor } from './dictionary.js';
 
 const statsEl = document.getElementById('stats');
@@ -63,12 +63,7 @@ function renderJumbleImages(card) {
     subjects.push(subject);
   }
   if (subjects.length === 0) return '';
-  const imgs = subjects
-    .map(
-      ({ root, definition }) =>
-        `<img class="wd-image" src="${imageUrlFor(root, definition)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
-    )
-    .join('');
+  const imgs = subjects.map(({ root, definition }) => imageHtmlFor(root, definition)).join('');
   return `<div class="jumble-images">${imgs}</div>`;
 }
 
@@ -123,9 +118,7 @@ function renderWordDefCard(card, revealed) {
   const defContent = definitionVisible
     ? `<div class="wd-content wd-definition${defHighlight}">${definition}</div>`
     : blurBlock('definition');
-  const imageContent = definitionVisible
-    ? `<img class="wd-image" src="${imageUrlFor(word, definition)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
-    : '';
+  const imageContent = definitionVisible ? imageHtmlFor(word, definition) : '';
   return `
     <div class="word-def-row">
       <div class="wd-slot">

@@ -199,15 +199,65 @@ button.secondary {
   font-weight: 500;
 }
 
-.wd-image {
+/* Wraps an illustration together with a loading indicator (see
+   js/images.js's imageHtmlFor) — sized here rather than on .wd-image
+   itself, since the progress bar needs to fill the same box while the
+   image underneath is still just a transparent, unsized <img>. */
+.wd-image-wrap {
+  position: relative;
   display: block;
   width: 100%;
   max-width: 160px;
   aspect-ratio: 1;
+  margin-top: 0.6rem;
+}
+
+.wd-image {
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   border-radius: 8px;
-  margin-top: 0.6rem;
   border: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.wd-image-wrap.wd-image-loaded .wd-image { opacity: 1; }
+
+/* First view of a not-yet-generated word can take several real seconds
+   (see js/images.js) — an empty box with nothing happening reads as
+   broken, so this fills toward a deliberately generous guess at the
+   longest case and eases off short of 100%, as a "still working"
+   signal rather than a real ETA. Snaps to done (or a quiet failure
+   state) as soon as the image actually settles, whichever comes first. */
+.wd-image-progress {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--tile);
+  overflow: hidden;
+}
+
+.wd-image-progress-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  width: 0%;
+  background: var(--accent);
+  animation: wd-image-progress 15s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
+}
+
+@keyframes wd-image-progress {
+  from { width: 0%; }
+  to { width: 92%; }
+}
+
+.wd-image-wrap.wd-image-loaded .wd-image-progress,
+.wd-image-wrap.wd-image-failed .wd-image-progress {
+  display: none;
 }
 
 /* A jumble can have several valid solutions, each with its own picture
@@ -222,7 +272,7 @@ button.secondary {
   margin-top: 0.4rem;
 }
 
-.jumble-images .wd-image {
+.jumble-images .wd-image-wrap {
   width: 110px;
   max-width: 110px;
   margin-top: 0;

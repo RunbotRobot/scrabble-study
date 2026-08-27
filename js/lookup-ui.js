@@ -1,6 +1,6 @@
 import { getWordInfo, queueWord } from './store.js';
 import { scheduleSync } from './sync.js';
-import { imageUrlFor } from './images.js';
+import { imageHtmlFor } from './images.js';
 
 const CARD_TYPE_LABELS = {
   word2def: 'Word → Definition',
@@ -13,15 +13,13 @@ function renderRoot(r) {
   const definition =
     r.senses.length > 0 ? r.senses.map((s) => `${s.definition} (${s.pos})`).join(' / ') : 'No definition on file.';
   const inflections = r.inflections.length > 0 ? r.inflections.join(', ') : '—';
-  const imageHtml =
-    r.senses.length > 0
-      ? `<img class="wd-image" src="${imageUrlFor(r.root, r.senses.map((s) => s.definition).join(' / '))}" alt="" loading="lazy" onerror="this.style.display='none'" />`
-      : '';
+  const imageMarkup =
+    r.senses.length > 0 ? imageHtmlFor(r.root, r.senses.map((s) => s.definition).join(' / ')) : '';
   return `
     <div class="lookup-root">
       <div class="lookup-root-name">${r.root}</div>
       <div class="lookup-definition">${definition}</div>
-      ${imageHtml}
+      ${imageMarkup}
       <div class="lookup-inflections"><span class="lookup-label">Conjugations/plurals</span> ${inflections}</div>
     </div>
   `;

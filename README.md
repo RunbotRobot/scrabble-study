@@ -213,6 +213,15 @@ looking unrelated to the word entirely. If a generated image still turns
 out nonsensical, `DELETE /image/:word` evicts the cached copy so the next
 view regenerates it.
 
+Generating a word's first-ever image is a real few-second wait, not
+instant — an `<img>` alone during that stretch just looks broken (an
+empty box, no sign anything's happening). Every illustration shows a
+loading bar first, filling toward a deliberately generous guess at the
+longest case and easing off short of full rather than stalling dead —
+it's a "still working" signal, not a real ETA — then swaps to the
+actual image (or a quiet failure state, indistinguishable from before)
+as soon as it settles.
+
 Pollinations alone can't keep up with a 50-word batch (it rate-limits
 bursts). A Gemini API fallback for exactly that case was investigated
 and built, then pulled back out: every image-capable Gemini model

@@ -16,3 +16,25 @@ export function imageUrlFor(word, definition) {
   const prompt = definition ? `${word}: ${definition}` : word;
   return `${url}?prompt=${encodeURIComponent(prompt)}`;
 }
+
+/** Markup for a root's illustration, including a loading indicator for
+ * the (common) case where this is the very first request for that word
+ * and the worker has to actually generate it — that can take several
+ * seconds, during which an `<img>` alone just looks broken (an empty
+ * box, no feedback that anything's happening). Since there's no way to
+ * know real progress, the bar fills toward a deliberately generous
+ * guess at the longest case and eases off rather than stalling dead —
+ * it's a "this is still working" signal, not a real ETA. Swaps over to
+ * the actual image (or a quiet failure state) as soon as it settles,
+ * whichever comes first. */
+export function imageHtmlFor(word, definition) {
+  const src = imageUrlFor(word, definition);
+  return `
+    <div class="wd-image-wrap">
+      <div class="wd-image-progress"><div class="wd-image-progress-bar"></div></div>
+      <img class="wd-image" src="${src}" alt="" loading="lazy"
+        onload="this.closest('.wd-image-wrap').classList.add('wd-image-loaded')"
+        onerror="this.closest('.wd-image-wrap').classList.add('wd-image-failed')" />
+    </div>
+  `;
+}

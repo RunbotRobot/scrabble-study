@@ -281,6 +281,27 @@ async function generateWithGemini(prompt, apiKey) {
   }
 }
 
+/** Temporary diagnostic aid (see ?debug=1) — repeats the Gemini call
+ * without swallowing the error, so a failure can actually be seen
+ * instead of just falling through to a generic 502. */
+async function debugGemini(prompt, apiKey) {
+  if (!apiKey) return { configured: false };
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        model: 'gemini-3.1-flash-lite-image',
+        input: [{ type: 'text', text: prompt }],
+      }),
+    });
+    const bodyText = await res.text();
+    return { configured: true, status: res.status, body: bodyText.slice(0, 1500) };
+  } catch (err) {
+    return { configured: true, exception: String(err) };
+  }
+}
+
 async function handleImage(request, env, word) {
   if (!WORD_RE.test(word)) {
     return json({ error: 'Invalid word' }, 400);
@@ -294,6 +315,11 @@ async function handleImage(request, env, word) {
   }
 
   const prompt = new URL(request.url).searchParams.get('prompt') || word;
+  const debug = new URL(request.url).searchParams.get('debug') === '1';
+  if (debug) {
+    const gemini = await debugGemini(prompt, env.GEMINI_API_KEY);
+    return json({ gemini });
+  }
   const generated =
     (await generateWithPollinations(prompt)) || (await generateWithGemini(prompt, env.GEMINI_API_KEY));
   if (!generated) {

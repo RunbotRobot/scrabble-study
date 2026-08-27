@@ -305,11 +305,13 @@ Even after months of daily use, this app's own `localStorage` data
 (cards, selected words, streak, sync id) stays in the tens-to-low-
 hundreds of KB — nowhere near a normal browser's multi-MB quota. So a
 "storage quota exceeded" error isn't this app writing too much; it's
-something about the browser itself — private/incognito windows enforce
-a near-zero quota in several browsers regardless of how little you're
-writing, and a device critically low on free storage can too. The error
-message says as much rather than the generic "try reloading" advice
-other failures get, since reloading doesn't fix either cause.
+something about the browser/device itself (private browsing and a full
+device are the two most common causes, but not the only ones). The
+error message skips the generic "try reloading" advice other failures
+get, since reloading fixes none of those, and — where the browser
+supports `navigator.storage.estimate()` — appends the browser's own
+actual usage-vs-quota numbers a moment later, since guessing further at
+the cause isn't as useful as just reading it off the browser directly.
 
 Two things are intentionally **not** synced, since they're per-device
 session bookkeeping rather than study data: your current correct-answer

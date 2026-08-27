@@ -1,5 +1,12 @@
 import { loadDictionary } from './dictionary.js';
-import { generateIntroBatch, getNextCard, answerCard, getStats, getDeckAnagramSolutions } from './store.js';
+import {
+  generateIntroBatch,
+  getNextCard,
+  answerCard,
+  getStats,
+  getDeckAnagramSolutions,
+  describeStorageQuota,
+} from './store.js';
 import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
@@ -215,6 +222,18 @@ function showMilestoneMessage(text, isError = false) {
   milestoneMessageEl.classList.toggle('milestone-message-error', isError);
 }
 
+/** Appends the browser's own storage-usage numbers to whatever error
+ * message is currently shown, once they're available — the message
+ * itself renders immediately (this is async), then gets the concrete
+ * "X of Y MB" detail appended a moment later. No-ops if the message has
+ * since changed (e.g. the user moved on to another card) or the
+ * browser doesn't support the estimate API. */
+async function appendQuotaDiagnostics(baseText) {
+  const info = await describeStorageQuota();
+  if (!info || milestoneMessageEl.textContent !== baseText) return;
+  milestoneMessageEl.textContent = `${baseText} (${info})`;
+}
+
 /** Grading can throw or come back empty in ways a click handler would
  * otherwise swallow silently (e.g. this exact card's id no longer
  * exists in local storage — nothing left for the UI to visibly get
@@ -249,7 +268,9 @@ function grade(correct) {
   } catch (err) {
     console.error('Grading failed:', err);
     const advice = err.quotaExceeded ? '' : ' Try reloading the page.';
-    showMilestoneMessage(`⚠️ Couldn't record that answer: ${err.message}.${advice}`, true);
+    const text = `⚠️ Couldn't record that answer: ${err.message}.${advice}`;
+    showMilestoneMessage(text, true);
+    if (err.quotaExceeded) appendQuotaDiagnostics(text);
   }
 
   refreshStats();
@@ -274,7 +295,9 @@ function bootstrapIfEmpty() {
   } catch (err) {
     console.error('Bootstrapping the first batch failed:', err);
     const advice = err.quotaExceeded ? '' : ' Try reloading the page.';
-    showMilestoneMessage(`⚠️ Couldn't create your first cards: ${err.message}.${advice}`, true);
+    const text = `⚠️ Couldn't create your first cards: ${err.message}.${advice}`;
+    showMilestoneMessage(text, true);
+    if (err.quotaExceeded) appendQuotaDiagnostics(text);
   }
   refreshStats();
   loadNextCard();

@@ -1,4 +1,4 @@
-import { getWordInfo, queueWord } from './store.js';
+import { getWordInfo, queueWord, describeStorageQuota } from './store.js';
 import { scheduleSync } from './sync.js';
 import { imageHtmlFor } from './images.js';
 import { imageSubjectFor } from './dictionary.js';
@@ -121,6 +121,15 @@ export function initLookupUI(buttonEl, modalRootEl) {
           console.error('Queueing word failed:', err);
           const advice = err.quotaExceeded ? '' : ' Try reloading the page.';
           message = `⚠️ Couldn't queue that word: ${err.message}.${advice}`;
+          if (err.quotaExceeded) {
+            const forWord = word;
+            const baseMessage = message;
+            describeStorageQuota().then((info) => {
+              if (!info || word !== forWord || message !== baseMessage) return;
+              message = `${baseMessage} (${info})`;
+              refresh(word);
+            });
+          }
         }
         refresh(word);
       });

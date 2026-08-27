@@ -41,23 +41,40 @@ function isQuotaExceededError(err) {
   return err instanceof DOMException && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014);
 }
 
+/** How much of its storage quota this origin is actually using, per the
+ * browser's own accounting — the ground truth for diagnosing a "quota
+ * exceeded" error, since this app's own data is small enough that the
+ * usual suspects (private browsing, a full device) don't always explain
+ * it. Not supported in every browser; null if unavailable or it throws. */
+export async function describeStorageQuota() {
+  if (!navigator.storage?.estimate) return null;
+  try {
+    const { usage, quota } = await navigator.storage.estimate();
+    if (typeof usage !== 'number' || typeof quota !== 'number') return null;
+    const mb = (n) => (n / (1024 * 1024)).toFixed(1);
+    return `browser reports ${mb(usage)} MB used of ${mb(quota)} MB allowed for this site`;
+  } catch {
+    return null;
+  }
+}
+
 /** This app's own data (cards, selected words, streak, sync id) never
  * exceeds a few hundred KB even after months of use — nowhere near a
  * normal browser's localStorage quota, which is typically several MB.
- * A quota error here means something *outside* this app's own data
- * (private/incognito browsing enforces a near-zero quota in several
- * browsers regardless of how little you're writing; a device critically
- * low on free storage can too) — so the fix isn't "write less," it's
- * telling the user what's actually going on, since "reload the page"
- * (the generic advice callers give for other failures) would do
- * nothing here. */
+ * A quota error here means something *outside* this app's own data is
+ * consuming the origin's storage budget, or the browser is enforcing an
+ * unusually small one (private browsing is the most common case, but
+ * not the only one) — so the fix isn't "write less," it's surfacing
+ * what's going on (see describeStorageQuota) instead of the generic
+ * "reload the page" advice other failures get, which does nothing
+ * here. */
 function save(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
     if (isQuotaExceededError(err)) {
       const wrapped = new Error(
-        "your browser is blocking storage here (often private/incognito browsing, or the device is low on storage) — try a normal browser window, or free up device storage"
+        "your browser is blocking storage here — this app's own data is far too small to hit a normal quota, so something else about this browser/device is restricting it"
       );
       wrapped.quotaExceeded = true;
       throw wrapped;

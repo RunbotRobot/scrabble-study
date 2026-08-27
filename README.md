@@ -268,6 +268,31 @@ The site is a PWA — on a phone, use your browser's "Add to Home Screen" /
 browser chrome. A service worker caches the app shell and dictionary data
 on first visit, so it keeps working offline after that.
 
+The service worker's app-shell strategy is meant to be network-first —
+an online visit should always pick up whatever's actually deployed. But
+a plain `fetch()` can still be silently served from the *browser's own*
+HTTP cache underneath the service worker, if the host sends cacheable
+headers on static files (GitHub Pages does) — "network-first" only
+means "don't fall back to the service worker's own cache unless the
+network fetch fails," not "always actually reach the network." When
+that happens, no amount of reloading picks up a new deploy until that
+HTTP cache entry expires on its own. The shell fetch now explicitly
+forces `cache: 'no-store'` to close that gap.
+
+## App version
+
+The Options panel shows the running version (from `version.json`,
+bumped by hand on every deploy that changes client-visible behavior —
+there's no build step to derive it from the git commit automatically).
+Besides being a way to confirm what you're actually running, it's also
+how the app detects a stale tab: every 5 minutes, and whenever the tab
+comes back to the foreground, it re-fetches `version.json` with
+`cache: 'no-store'` (bypassing every caching layer, including the HTTP
+cache issue above) and reloads if that disagrees with what was loaded
+at startup — catching a deploy that happened after this page loaded
+far sooner, and only when something actually changed, than the blind
+"reload after 12 hours regardless" heuristic this replaced.
+
 ## Spaced repetition
 
 Each flashcard tracks its own simplified SM-2 state (interval, ease,

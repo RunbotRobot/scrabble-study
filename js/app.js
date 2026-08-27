@@ -13,6 +13,7 @@ import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
 import { imageHtmlFor } from './images.js';
 import { imageSubjectFor } from './dictionary.js';
+import { fetchVersion } from './version.js';
 
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
@@ -23,6 +24,7 @@ const lookupModalEl = document.getElementById('lookup-modal-root');
 const optionsBtnEl = document.getElementById('options-btn');
 const optionsModalEl = document.getElementById('options-modal-root');
 const optionsCloseEl = document.getElementById('options-close');
+const versionInfoEl = document.getElementById('version-info');
 
 function closeOptions() {
   optionsModalEl.hidden = true;
@@ -310,19 +312,32 @@ function bootstrapIfEmpty() {
 // A stale-enough copy isn't just "missing a feature": card ids and data
 // shapes can drift from what current code (and the synced server data)
 // expects, breaking things in ways that look like silent no-ops rather
-// than an obvious error. Reloading periodically bounds how stale a
-// long-lived tab can get; only when the tab is actually in the
-// foreground, so it can't interrupt a session no one's looking at.
-const RELOAD_AFTER_MS = 12 * 60 * 60 * 1000;
-const pageLoadedAt = Date.now();
-setInterval(
-  () => {
-    if (!document.hidden && Date.now() - pageLoadedAt > RELOAD_AFTER_MS) {
-      location.reload();
-    }
-  },
-  30 * 60 * 1000
-);
+// than an obvious error.
+//
+// `loadedVersion` is whatever version.json this page itself was served
+// (not a cache-bypassing fetch — it should reflect reality, the same
+// as every other shell asset loaded at the same time). Periodically
+// re-checking with `bypassCache: true` and comparing catches a deploy
+// that happened after this page loaded — including one the browser's
+// HTTP cache would otherwise have hidden from a plain reload — rather
+// than the previous blind "reload after 12 hours regardless" heuristic,
+// which reacted slowly and unnecessarily reloaded even when nothing
+// had actually changed. Checks (and reloads) only in the foreground,
+// so it can't interrupt a session no one's looking at.
+let loadedVersion = null;
+const CHECK_VERSION_INTERVAL_MS = 5 * 60 * 1000;
+
+async function checkForNewVersion() {
+  if (document.hidden || !loadedVersion) return;
+  const latest = await fetchVersion({ bypassCache: true });
+  if (latest && latest !== loadedVersion) {
+    location.reload();
+  }
+}
+setInterval(checkForNewVersion, CHECK_VERSION_INTERVAL_MS);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForNewVersion();
+});
 
 (async function init() {
   studyCard.innerHTML = '<p class="card-empty">Loading dictionary&hellip;</p>';
@@ -337,6 +352,11 @@ setInterval(
   initSyncUI(syncPanelEl);
   initLookupUI(lookupBtnEl, lookupModalEl);
   startBackgroundSync();
+
+  fetchVersion().then((version) => {
+    loadedVersion = version;
+    if (versionInfoEl) versionInfoEl.textContent = version ? `Running ${version}` : "Couldn't determine version.";
+  });
 
   let didBootstrapCheck = false;
   function maybeBootstrap() {

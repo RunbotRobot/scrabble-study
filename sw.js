@@ -13,14 +13,15 @@
  *    it essentially never changes between visits.
  */
 
-const SHELL_CACHE = 'scrabble-study-shell-v3';
-const DATA_CACHE = 'scrabble-study-data-v3';
+const SHELL_CACHE = 'scrabble-study-shell-v4';
+const DATA_CACHE = 'scrabble-study-data-v4';
 
 const SHELL_ASSETS = [
   './',
   './index.html',
   './style.css',
   './manifest.webmanifest',
+  './version.json',
   './js/app.js',
   './js/cards.js',
   './js/dictionary.js',
@@ -32,6 +33,7 @@ const SHELL_ASSETS = [
   './js/streak.js',
   './js/sync-ui.js',
   './js/sync.js',
+  './js/version.js',
 ];
 
 const DATA_ASSETS = ['./data/dictionary.json', './icons/icon-192.png', './icons/icon-512.png'];
@@ -84,7 +86,15 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     (async () => {
       try {
-        const response = await fetch(event.request);
+        // `cache: 'no-store'` on the outbound fetch, not just "network
+        // over cache API" — a plain fetch(event.request) is still free
+        // to silently return an HTTP-cache hit if GitHub Pages sends
+        // cacheable headers, which defeats "network-first" entirely:
+        // the request never even reaches the network, so a genuinely
+        // new deploy stays invisible until that HTTP cache entry
+        // expires on its own, no matter how many times the page is
+        // reloaded in the meantime.
+        const response = await fetch(new Request(event.request, { cache: 'no-store' }));
         const cache = await caches.open(SHELL_CACHE);
         cache.put(event.request, response.clone());
         return response;

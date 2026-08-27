@@ -149,8 +149,10 @@ separately. Rather than leaving that pointer stuck inside the definition
 text, it gets its own **Endings** card, along with the root's
 conjugations/plurals and its `RE-`/`UN-`-prefixed form(s) (`READD`,
 `UNPALATABLE`, etc.), whichever of those exist and are valid Scrabble
-words. Verb conjugations are listed `-ED, -ING, -S` — e.g. `PREVISED,
-PREVISING, PREVISES` — rather than alphabetically. Endings cards share
+words. Forms are ordered rather than alphabetized: verb conjugations
+read `-ED, -ING, -S` (e.g. `PREVISED, PREVISING, PREVISES`), and where a
+root has both a regular and an irregular plural, the regular one comes
+first (e.g. `MACULAS, MACULAE`). Endings cards share
 the word2def two-column layout (root word on the left) but carry an
 "Endings" label and a background color distinct from a definition's,
 visible even before "Show answer" so it reads as an endings card at a
@@ -189,6 +191,20 @@ given word and caches it in Cloudflare R2 forever after, so every device
 — and every other word that happens to share a root — benefits from that
 one generation. Roots with no definition on file don't get an image;
 there's nothing meaningful to illustrate.
+
+Pollinations alone can't keep up with a 50-word batch (it rate-limits
+bursts), so the worker falls back to the Gemini API's free tier when
+Pollinations fails, if a `GEMINI_API_KEY` is configured. Without one,
+image generation just keeps working through Pollinations alone — the
+fallback is purely additive. To enable it:
+
+1. Go to [Google AI Studio](https://aistudio.google.com/apikey) and
+   create an API key — free, no credit card required.
+2. This repo's GitHub **Settings → Secrets and variables → Actions**,
+   add a repository secret named `GEMINI_API_KEY` with that key.
+3. Push (or re-run the `Deploy sync worker` workflow) — it sets the key
+   as a Worker secret automatically. Leaving the secret unset (or
+   deleting it) just goes back to Pollinations-only.
 
 ## Options panel and looking up a word
 

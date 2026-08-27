@@ -8,15 +8,17 @@ const MAX_JUMBLE_LENGTH = 8;
  * letters. */
 const MAX_DEFINITION_ROOT_LENGTH = 8;
 
-/** Sorts inflected forms so verb conjugations read in the natural order
- * -ED, -ING, then everything else (typically the -S form, plus any
- * irregular forms a regular suffix check can't classify) — rather than
- * whatever order the source data or alphabetization happens to produce.
- * Stable, so forms within the same group keep their relative order. */
+/** Sorts inflected forms into a natural reading order — verb
+ * conjugations as -ED, -ING, then the -S form (e.g. PREVISED, PREVISING,
+ * PREVISES), and for plurals, the regular -S/-ES form before an
+ * irregular one (e.g. MACULAS before MACULAE) — rather than whatever
+ * order the source data or alphabetization happens to produce. Stable,
+ * so forms within the same group keep their relative order. */
 function inflectionRank(form) {
   if (form.endsWith('ED')) return 0;
   if (form.endsWith('ING')) return 1;
-  return 2;
+  if (form.endsWith('S')) return 2;
+  return 3;
 }
 
 /** Builds the flashcard specs for a root word: a word->definition card,

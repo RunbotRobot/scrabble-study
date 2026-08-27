@@ -34,7 +34,11 @@
  * flowers" for HAKU is the same picture for everyone). On a cache miss,
  * generates one via Pollinations.ai (free, keyless) using `prompt` (the
  * word's definition, supplied by the client) and stores it in R2 before
- * returning it, so every word is generated at most once, ever.
+ * returning it, so every word is generated at most once, ever. If
+ * Pollinations fails (e.g. rate-limited during a large batch), falls
+ * back to the Gemini API's free tier — only when the GEMINI_API_KEY
+ * secret is configured; otherwise this fallback is silently skipped and
+ * Pollinations remains the only generator, exactly as before.
  */
 
 const SYNC_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -234,6 +238,49 @@ const IMAGE_CACHE_HEADERS = {
   ...CORS_HEADERS,
 };
 
+/** Free, keyless, always tried first. Returns null (never throws) on any
+ * failure so the caller can fall through to generateWithGemini. */
+async function generateWithPollinations(prompt) {
+  try {
+    const genUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`;
+    const res = await fetch(genUrl);
+    if (!res.ok) return null;
+    return { bytes: await res.arrayBuffer(), contentType: 'image/jpeg' };
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback for when Pollinations is rate-limited — a second free-tier
+ * quota to draw on, e.g. during a 50-word batch that outpaces
+ * Pollinations alone. Only attempted when env.GEMINI_API_KEY is
+ * configured (a Cloudflare Worker secret — see README); returns null
+ * (never throws) on any failure, including an unset key, so it's always
+ * safe to call. */
+async function generateWithGemini(prompt, apiKey) {
+  if (!apiKey) return null;
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        model: 'gemini-3.1-flash-lite-image',
+        input: [{ type: 'text', text: prompt }],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const image = data.output_image;
+    if (!image || !image.data) return null;
+    const binary = atob(image.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return { bytes: bytes.buffer, contentType: image.mime_type || 'image/png' };
+  } catch {
+    return null;
+  }
+}
+
 async function handleImage(request, env, word) {
   if (!WORD_RE.test(word)) {
     return json({ error: 'Invalid word' }, 400);
@@ -242,18 +289,18 @@ async function handleImage(request, env, word) {
 
   const existing = await env.IMAGES.get(key);
   if (existing) {
-    return new Response(existing.body, { headers: { 'Content-Type': 'image/jpeg', ...IMAGE_CACHE_HEADERS } });
+    const contentType = existing.httpMetadata?.contentType || 'image/jpeg';
+    return new Response(existing.body, { headers: { 'Content-Type': contentType, ...IMAGE_CACHE_HEADERS } });
   }
 
   const prompt = new URL(request.url).searchParams.get('prompt') || word;
-  const genUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`;
-  const genRes = await fetch(genUrl);
-  if (!genRes.ok) {
-    return json({ error: `Image generation failed: ${genRes.status}` }, 502);
+  const generated =
+    (await generateWithPollinations(prompt)) || (await generateWithGemini(prompt, env.GEMINI_API_KEY));
+  if (!generated) {
+    return json({ error: 'Image generation failed (all providers)' }, 502);
   }
-  const bytes = await genRes.arrayBuffer();
-  await env.IMAGES.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
-  return new Response(bytes, { headers: { 'Content-Type': 'image/jpeg', ...IMAGE_CACHE_HEADERS } });
+  await env.IMAGES.put(key, generated.bytes, { httpMetadata: { contentType: generated.contentType } });
+  return new Response(generated.bytes, { headers: { 'Content-Type': generated.contentType, ...IMAGE_CACHE_HEADERS } });
 }
 
 export default {

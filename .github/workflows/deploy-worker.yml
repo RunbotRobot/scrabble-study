@@ -21,3 +21,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Optional: a free Gemini API key used as a fallback image generator
+      # when Pollinations is rate-limited (see README's "Root word images"
+      # section). Skipped entirely if the GEMINI_API_KEY repo secret isn't
+      # set — the worker just keeps using Pollinations alone.
+      - name: Set Gemini API key secret
+        if: ${{ secrets.GEMINI_API_KEY != '' }}
+        run: echo "${{ secrets.GEMINI_API_KEY }}" | npx wrangler@4 secret put GEMINI_API_KEY
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

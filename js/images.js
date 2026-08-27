@@ -25,13 +25,17 @@ export function imageUrlFor(word, definition) {
  * know real progress, the bar fills toward a deliberately generous
  * guess at the longest case and eases off rather than stalling dead —
  * it's a "this is still working" signal, not a real ETA. Swaps over to
- * the actual image (or a quiet failure state) as soon as it settles,
- * whichever comes first. */
+ * the actual image once it arrives — or, on failure (e.g. a transient
+ * generation error), a small "couldn't load" placeholder rather than
+ * just vanishing, which otherwise reads as a rendering glitch instead
+ * of a word that's momentarily not illustrated. A later view retries
+ * from scratch, since a failure is never cached. */
 export function imageHtmlFor(word, definition) {
   const src = imageUrlFor(word, definition);
   return `
     <div class="wd-image-wrap">
       <div class="wd-image-progress"><div class="wd-image-progress-bar"></div></div>
+      <div class="wd-image-error">picture unavailable</div>
       <img class="wd-image" src="${src}" alt="" loading="lazy"
         onload="this.closest('.wd-image-wrap').classList.add('wd-image-loaded')"
         onerror="this.closest('.wd-image-wrap').classList.add('wd-image-failed')" />

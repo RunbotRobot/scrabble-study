@@ -118,7 +118,14 @@ function renderWordDefCard(card, revealed) {
   const defContent = definitionVisible
     ? `<div class="wd-content wd-definition${defHighlight}">${definition}</div>`
     : blurBlock('definition');
-  const imageContent = definitionVisible ? imageHtmlFor(word, definition) : '';
+  // Uses imageSubjectFor's own (possibly enriched, see dictionary.js)
+  // definition for the illustration rather than `definition` above —
+  // that text is what's actually quizzed and must stay exactly what
+  // the card was built with, but the image is just a visual aid and
+  // can afford a richer prompt when the root's definition alone is a
+  // thin same-as-another-word pointer.
+  const imageSubject = imageSubjectFor(word);
+  const imageContent = definitionVisible && imageSubject ? imageHtmlFor(word, imageSubject.definition) : '';
   return `
     <div class="word-def-row">
       <div class="wd-slot">

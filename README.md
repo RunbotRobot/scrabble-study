@@ -209,9 +209,14 @@ nothing meaningful to illustrate. The generation prompt pairs the word
 with its definition rather than sending the bare definition alone — a
 gloss like "to find fault incessantly" (`NAG`) is abstract enough on its
 own that the model has nothing concrete to anchor on, so it can come out
-looking unrelated to the word entirely. If a generated image still turns
-out nonsensical, `DELETE /image/:word` evicts the cached copy so the next
-view regenerates it.
+looking unrelated to the word entirely. A definition that's nothing but
+"(a/an/to) OTHERWORD" — the dictionary source's shorthand for "means the
+same as OTHERWORD" (e.g. `STOTT`'s is literally "to stot", pointing at
+`STOT`) — gets OTHERWORD's own definition folded in too when it has one
+("to stot (to bound with a stiff-legged gait)"), since OTHERWORD is
+often just as obscure a Scrabble word as the one being illustrated. If a
+generated image still turns out nonsensical, `DELETE /image/:word`
+evicts the cached copy so the next view regenerates it.
 
 Generating a word's first-ever image is a real few-second wait, not
 instant — an `<img>` alone during that stretch just looks broken (an
@@ -219,8 +224,16 @@ empty box, no sign anything's happening). Every illustration shows a
 loading bar first, filling toward a deliberately generous guess at the
 longest case and easing off short of full rather than stalling dead —
 it's a "still working" signal, not a real ETA — then swaps to the
-actual image (or a quiet failure state, indistinguishable from before)
-as soon as it settles.
+actual image, or a small "picture unavailable" placeholder on failure
+(rather than the box just vanishing, which reads as a glitch). A failed
+generation is never cached, so the next view tries again from scratch.
+
+It's safe to keep studying while an image is mid-generation — moving on
+before it loads doesn't waste the attempt. The worker registers the
+generate-and-cache step with `ctx.waitUntil()`, so the platform keeps it
+running to completion (and still writes it to R2) even if your browser
+has already disconnected from that particular request by the time it
+finishes.
 
 Pollinations alone can't keep up with a 50-word batch (it rate-limits
 bursts). A Gemini API fallback for exactly that case was investigated

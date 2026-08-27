@@ -74,6 +74,36 @@ export function wordExists(word) {
   return Boolean(words[word]);
 }
 
+/** Matches a definition that's nothing but "(a/an/to) OTHERWORD" — the
+ * dictionary source's `{otherword=pos}` shorthand for "this means the
+ * same as that word" (e.g. STOTT's definition is literally "to stot",
+ * pointing at STOT). Fine as reading text once you already know
+ * OTHERWORD, but if OTHERWORD is itself an obscure Scrabble-only word,
+ * an image model has nothing to latch onto either. */
+const THIN_DEFINITION_RE = /^(?:to|an?)\s+([a-z]+)$/i;
+
+/** `definition`, enriched with the referenced word's own definition if
+ * `definition` is a thin same-as-OTHERWORD pointer (see
+ * THIN_DEFINITION_RE) and that word has one — e.g. "to stot" becomes
+ * "to stot (to bound with a stiff-legged gait)". Otherwise returned
+ * unchanged, including when the reference resolves to nothing richer
+ * (plenty of these are already perfectly depictable as-is, e.g. AD:
+ * "an advertisement"). */
+function enrichThinDefinition(definition, root) {
+  const m = definition.match(THIN_DEFINITION_RE);
+  if (!m) return definition;
+  const referenced = m[1].toUpperCase();
+  if (referenced === root) return definition;
+  const referencedSenses = getRootSenses(referenced);
+  const referencedDefinition = referencedSenses
+    ? referencedSenses
+        .map((s) => s.definition)
+        .filter(Boolean)
+        .join(' / ')
+    : '';
+  return referencedDefinition ? `${definition} (${referencedDefinition})` : definition;
+}
+
 /** The { root, definition } an illustration for `word` should be
  * generated/cached under — always the root's own image, never a
  * separate one per inflected form, so e.g. MACULAS and MACULAE (both
@@ -87,7 +117,7 @@ export function imageSubjectFor(word) {
   const senses = getRootSenses(root);
   if (!senses) return null;
   const definition = senses
-    .map((s) => s.definition)
+    .map((s) => enrichThinDefinition(s.definition, root))
     .filter(Boolean)
     .join(' / ');
   if (!definition) return null;

@@ -257,7 +257,7 @@ async function generateWithPollinations(prompt) {
   }
 }
 
-async function handleImage(request, env, word) {
+async function handleImage(request, env, ctx, word) {
   if (!WORD_RE.test(word)) {
     return json({ error: 'Invalid word' }, 400);
   }
@@ -270,11 +270,28 @@ async function handleImage(request, env, word) {
   }
 
   const prompt = new URL(request.url).searchParams.get('prompt') || word;
-  const generated = await generateWithPollinations(prompt);
+
+  // Generation + caching runs as its own promise, registered with
+  // waitUntil so the platform keeps it alive to completion even if the
+  // requester disconnects before it's done (e.g. the client already
+  // moved on to the next flashcard) — otherwise a request that arrives
+  // right as someone navigates away could get cut off before the R2
+  // write, wasting the generation and leaving the word to regenerate
+  // from scratch next time instead of being cached for good. Awaiting
+  // the same promise here still lets a requester who *does* stick
+  // around get the bytes back directly, same as before.
+  const generation = (async () => {
+    const generated = await generateWithPollinations(prompt);
+    if (!generated) return null;
+    await env.IMAGES.put(key, generated.bytes, { httpMetadata: { contentType: generated.contentType } });
+    return generated;
+  })();
+  ctx.waitUntil(generation.catch(() => {}));
+
+  const generated = await generation;
   if (!generated) {
     return json({ error: 'Image generation failed' }, 502);
   }
-  await env.IMAGES.put(key, generated.bytes, { httpMetadata: { contentType: generated.contentType } });
   return new Response(generated.bytes, { headers: { 'Content-Type': generated.contentType, ...IMAGE_CACHE_HEADERS } });
 }
 
@@ -291,7 +308,7 @@ async function handleImageDelete(env, word) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -309,7 +326,7 @@ export default {
     const imageMatch = url.pathname.match(/^\/image\/([^/]+)$/);
     if (imageMatch && request.method === 'GET') {
       try {
-        return await handleImage(request, env, decodeURIComponent(imageMatch[1]));
+        return await handleImage(request, env, ctx, decodeURIComponent(imageMatch[1]));
       } catch (err) {
         return json({ error: `Internal error: ${err.message}` }, 500);
       }

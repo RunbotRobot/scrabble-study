@@ -1,6 +1,7 @@
 import { getWordInfo, queueWord } from './store.js';
 import { scheduleSync } from './sync.js';
 import { imageHtmlFor } from './images.js';
+import { imageSubjectFor } from './dictionary.js';
 
 const CARD_TYPE_LABELS = {
   word2def: 'Word → Definition',
@@ -13,8 +14,11 @@ function renderRoot(r) {
   const definition =
     r.senses.length > 0 ? r.senses.map((s) => `${s.definition} (${s.pos})`).join(' / ') : 'No definition on file.';
   const inflections = r.inflections.length > 0 ? r.inflections.join(', ') : '—';
-  const imageMarkup =
-    r.senses.length > 0 ? imageHtmlFor(r.root, r.senses.map((s) => s.definition).join(' / ')) : '';
+  // imageSubjectFor's definition may be enriched beyond the raw senses
+  // text above (see dictionary.js) — fine for the image prompt, which
+  // doesn't need to match the displayed definition word-for-word.
+  const imageSubject = r.senses.length > 0 ? imageSubjectFor(r.root) : null;
+  const imageMarkup = imageSubject ? imageHtmlFor(r.root, imageSubject.definition) : '';
   return `
     <div class="lookup-root">
       <div class="lookup-root-name">${r.root}</div>

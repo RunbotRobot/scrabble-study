@@ -248,7 +248,8 @@ function grade(correct) {
     }
   } catch (err) {
     console.error('Grading failed:', err);
-    showMilestoneMessage(`⚠️ Couldn't record that answer (${err.message}). Try reloading the page.`, true);
+    const advice = err.quotaExceeded ? '' : ' Try reloading the page.';
+    showMilestoneMessage(`⚠️ Couldn't record that answer: ${err.message}.${advice}`, true);
   }
 
   refreshStats();
@@ -261,11 +262,19 @@ function grade(correct) {
 // pull down any existing cloud data, seed a first batch automatically.
 function bootstrapIfEmpty() {
   if (getStats().totalCards > 0) return;
-  const result = generateIntroBatch(MILESTONE_EVERY);
-  if (result.ok) {
-    milestoneMessageEl.textContent = `Added ${result.cardsAdded} card${
-      result.cardsAdded === 1 ? '' : 's'
-    } across ${result.wordsAdded} word${result.wordsAdded === 1 ? '' : 's'} to get you started.`;
+  try {
+    const result = generateIntroBatch(MILESTONE_EVERY);
+    if (result.ok) {
+      showMilestoneMessage(
+        `Added ${result.cardsAdded} card${result.cardsAdded === 1 ? '' : 's'} across ${result.wordsAdded} word${
+          result.wordsAdded === 1 ? '' : 's'
+        } to get you started.`
+      );
+    }
+  } catch (err) {
+    console.error('Bootstrapping the first batch failed:', err);
+    const advice = err.quotaExceeded ? '' : ' Try reloading the page.';
+    showMilestoneMessage(`⚠️ Couldn't create your first cards: ${err.message}.${advice}`, true);
   }
   refreshStats();
   loadNextCard();

@@ -301,6 +301,16 @@ network. On top of that, a small Cloudflare Worker + D1 database (see
 **Write your sync code down somewhere safe once you generate it** — it's
 the only way to link a second device or recover after losing this one.
 
+Even after months of daily use, this app's own `localStorage` data
+(cards, selected words, streak, sync id) stays in the tens-to-low-
+hundreds of KB — nowhere near a normal browser's multi-MB quota. So a
+"storage quota exceeded" error isn't this app writing too much; it's
+something about the browser itself — private/incognito windows enforce
+a near-zero quota in several browsers regardless of how little you're
+writing, and a device critically low on free storage can too. The error
+message says as much rather than the generic "try reloading" advice
+other failures get, since reloading doesn't fix either cause.
+
 Two things are intentionally **not** synced, since they're per-device
 session bookkeeping rather than study data: your current correct-answer
 streak, and the "recently missed" pile. Study from more than one device

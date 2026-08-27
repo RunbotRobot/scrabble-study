@@ -119,7 +119,8 @@ export function initLookupUI(buttonEl, modalRootEl) {
             : result.message;
         } catch (err) {
           console.error('Queueing word failed:', err);
-          message = `⚠️ Couldn't queue that word (${err.message}). Try reloading the page.`;
+          const advice = err.quotaExceeded ? '' : ' Try reloading the page.';
+          message = `⚠️ Couldn't queue that word: ${err.message}.${advice}`;
         }
         refresh(word);
       });

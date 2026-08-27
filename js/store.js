@@ -37,8 +37,33 @@ function load(key, fallback) {
   }
 }
 
+function isQuotaExceededError(err) {
+  return err instanceof DOMException && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014);
+}
+
+/** This app's own data (cards, selected words, streak, sync id) never
+ * exceeds a few hundred KB even after months of use — nowhere near a
+ * normal browser's localStorage quota, which is typically several MB.
+ * A quota error here means something *outside* this app's own data
+ * (private/incognito browsing enforces a near-zero quota in several
+ * browsers regardless of how little you're writing; a device critically
+ * low on free storage can too) — so the fix isn't "write less," it's
+ * telling the user what's actually going on, since "reload the page"
+ * (the generic advice callers give for other failures) would do
+ * nothing here. */
 function save(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    if (isQuotaExceededError(err)) {
+      const wrapped = new Error(
+        "your browser is blocking storage here (often private/incognito browsing, or the device is low on storage) — try a normal browser window, or free up device storage"
+      );
+      wrapped.quotaExceeded = true;
+      throw wrapped;
+    }
+    throw err;
+  }
 }
 
 function getSelected() {

@@ -13,8 +13,8 @@
  *    it essentially never changes between visits.
  */
 
-const SHELL_CACHE = 'scrabble-study-shell-v4';
-const DATA_CACHE = 'scrabble-study-data-v4';
+const SHELL_CACHE = 'scrabble-study-shell-v5';
+const DATA_CACHE = 'scrabble-study-data-v5';
 
 const SHELL_ASSETS = [
   './',
@@ -25,6 +25,7 @@ const SHELL_ASSETS = [
   './js/app.js',
   './js/cards.js',
   './js/dictionary.js',
+  './js/idb-store.js',
   './js/images.js',
   './js/jumble.js',
   './js/lookup-ui.js',

@@ -2,11 +2,11 @@
  * Cloud backup / cross-device sync, backed by a small Cloudflare Worker +
  * D1 database (see worker/). This is a durability layer on top of
  * js/store.js, which remains the fast, always-available local source of
- * truth — every read/write in the app goes through localStorage first
- * and keeps working with no network at all. Sync just means "also push
- * local changes to the cloud, and pull down anything that happened
- * elsewhere," on a best-effort basis, so that losing or wiping this
- * device doesn't lose the study history.
+ * truth — every read/write in the app goes through IndexedDB (via
+ * js/idb-store.js) first and keeps working with no network at all. Sync
+ * just means "also push local changes to the cloud, and pull down
+ * anything that happened elsewhere," on a best-effort basis, so that
+ * losing or wiping this device doesn't lose the study history.
  *
  * There's no account system: a "sync ID" is a random unguessable token
  * generated on-device. Knowing it is the credential — like a share link.
@@ -14,6 +14,7 @@
  */
 
 import { getChangedSince, mergeRemote } from './store.js';
+import { get, set, remove } from './idb-store.js';
 
 export const WORKER_URL = 'https://scrabble-study-sync.runbotrobot.workers.dev';
 
@@ -29,7 +30,15 @@ function fetchWithTimeout(url, options, timeoutMs = FETCH_TIMEOUT_MS) {
   return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 
-let status = { state: 'idle', lastSyncAt: getLastSyncAt(), lastError: null };
+// Starts as a placeholder rather than reading getLastSyncAt() here
+// directly — this runs at module-import time, before app.js has had a
+// chance to await initPersistence() (idb-store's get()/set() require
+// that to have already resolved). runSync() below always reads the
+// real persisted value fresh when it actually needs it, so this only
+// affects what the UI shows for the few hundred ms before the first
+// sync (triggered immediately by startBackgroundSync) completes and
+// corrects it.
+let status = { state: 'idle', lastSyncAt: null, lastError: null };
 const listeners = new Set();
 
 function setStatus(patch) {
@@ -48,15 +57,15 @@ export function getStatus() {
 }
 
 export function getSyncId() {
-  return localStorage.getItem(KEY_SYNC_ID) || null;
+  return get(KEY_SYNC_ID, null);
 }
 
 function getLastSyncAt() {
-  return localStorage.getItem(KEY_LAST_SYNC_AT) || null;
+  return get(KEY_LAST_SYNC_AT, null);
 }
 
 function setLastSyncAt(iso) {
-  localStorage.setItem(KEY_LAST_SYNC_AT, iso);
+  return set(KEY_LAST_SYNC_AT, iso);
 }
 
 export function generateSyncId() {
@@ -69,10 +78,10 @@ export function isValidSyncId(id) {
 
 /** Adopts a sync ID (new or an existing one from another device) and
  * kicks off an immediate full sync. */
-export function setSyncId(id) {
+export async function setSyncId(id) {
   if (!isValidSyncId(id)) throw new Error('Invalid sync ID');
-  localStorage.setItem(KEY_SYNC_ID, id);
-  localStorage.removeItem(KEY_LAST_SYNC_AT);
+  await set(KEY_SYNC_ID, id);
+  await remove(KEY_LAST_SYNC_AT);
   setStatus({ lastSyncAt: null, lastError: null });
   return runSync();
 }
@@ -80,9 +89,9 @@ export function setSyncId(id) {
 /** Forgets sync on this device only. Does not delete anything in the
  * cloud — setting the same ID again (here or elsewhere) picks it back
  * up. */
-export function forgetSyncId() {
-  localStorage.removeItem(KEY_SYNC_ID);
-  localStorage.removeItem(KEY_LAST_SYNC_AT);
+export async function forgetSyncId() {
+  await remove(KEY_SYNC_ID);
+  await remove(KEY_LAST_SYNC_AT);
   setStatus({ state: 'idle', lastSyncAt: null, lastError: null });
 }
 
@@ -141,10 +150,10 @@ export function runSync() {
           throw new Error(`Sync failed: ${res.status} ${body}`);
         }
         const data = await res.json();
-        mergeRemote(data);
+        await mergeRemote(data);
         serverTime = data.serverTime;
       }
-      setLastSyncAt(serverTime);
+      await setLastSyncAt(serverTime);
       setStatus({ state: 'idle', lastSyncAt: serverTime, lastError: null });
       return { ok: true };
     } catch (err) {

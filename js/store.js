@@ -1,13 +1,24 @@
 /**
  * Persists study state (selected root words + flashcards + SRS progress)
- * in this browser's localStorage, which is always the fast/offline
- * source of truth for the UI. js/sync.js layers cloud backup/cross-device
- * sync on top of this — see there for how remote merges happen.
+ * in IndexedDB (see js/idb-store.js) — loaded into memory once at
+ * startup, then read/written synchronously from there for the rest of
+ * this module, so callers throughout the app mostly don't need to think
+ * about the underlying storage being async. js/sync.js layers cloud
+ * backup/cross-device sync on top of this — see there for how remote
+ * merges happen.
+ *
+ * Functions that only read are synchronous, same as before. Functions
+ * that write (queueWord, generateIntroBatch, answerCard, mergeRemote)
+ * are async now, since a write can genuinely fail (e.g. a quota error)
+ * and callers need a way to find that out — see js/idb-store.js's set().
  */
 
 import { pickRandomWord, resolveRoots, wordExists, wordCount, getRootSenses, getAnagramSolutions } from './dictionary.js';
 import { buildCardSpecs } from './cards.js';
 import { initialState, schedule, DEFAULT_EASE } from './srs.js';
+import { get, set, describeStorageQuota } from './idb-store.js';
+
+export { describeStorageQuota };
 
 const KEY_SELECTED = 'scrabbleStudy.selectedWords';
 const KEY_CARDS = 'scrabbleStudy.cards';
@@ -27,105 +38,13 @@ const INTRO_GRADUATION_REPS = 2;
  * into intensive intro drilling together. */
 const MISTAKE_BATCH_SIZE = 50;
 
-function load(key, fallback) {
-  const raw = localStorage.getItem(key);
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-function isQuotaExceededError(err) {
-  return err instanceof DOMException && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014);
-}
-
-/** How much of its storage quota this origin is actually using, per the
- * browser's own accounting — the ground truth for diagnosing a "quota
- * exceeded" error, since this app's own data is small enough that the
- * usual suspects (private browsing, a full device) don't always explain
- * it. Not supported in every browser; null if unavailable or it throws. */
-export async function describeStorageQuota() {
-  if (!navigator.storage?.estimate) return null;
-  try {
-    const { usage, quota } = await navigator.storage.estimate();
-    if (typeof usage !== 'number' || typeof quota !== 'number') return null;
-    const mb = (n) => (n / (1024 * 1024)).toFixed(1);
-    return `browser reports ${mb(usage)} MB used of ${mb(quota)} MB allowed for this site`;
-  } catch {
-    return null;
-  }
-}
-
-/** Every key currently in this origin's localStorage — not just this
- * app's own, in case something else ever shares the origin — with its
- * size in bytes (UTF-16 code units, close enough for the ~all-ASCII
- * data this app stores), largest first, plus the total. The number
- * (and, critically, the breakdown) that actually matters for
- * diagnosing a quota error, since localStorage has its own quota
- * separate from (and not reported by) navigator.storage.estimate() —
- * see describeStorageQuota. null if it can't be read for some reason. */
-function localStorageBreakdown() {
-  try {
-    const entries = [];
-    let total = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      const bytes = k.length + (localStorage.getItem(k) || '').length;
-      total += bytes;
-      entries.push({ key: k, bytes });
-    }
-    entries.sort((a, b) => b.bytes - a.bytes);
-    return { total, entries };
-  } catch {
-    return null;
-  }
-}
-
-/** This app's own data (cards, selected words, streak, sync id) never
- * exceeds a few hundred KB even after months of use — nowhere near a
- * normal browser's localStorage quota, which is typically several MB.
- * A quota error here means something *outside* this app's own data is
- * consuming the origin's storage budget, or the browser is enforcing an
- * unusually small one (private browsing is the most common case, but
- * not the only one) — so the fix isn't "write less," it's surfacing
- * what's going on (see describeStorageQuota, localStorageUsageBytes)
- * instead of the generic "reload the page" advice other failures get,
- * which does nothing here. */
-function save(key, value) {
-  const serialized = JSON.stringify(value);
-  try {
-    localStorage.setItem(key, serialized);
-  } catch (err) {
-    if (isQuotaExceededError(err)) {
-      const breakdown = localStorageBreakdown();
-      const kb = (n) => (n / 1024).toFixed(1);
-      let existingText = 'an unreadable amount';
-      if (breakdown) {
-        const top = breakdown.entries
-          .slice(0, 4)
-          .map((e) => `${e.key}: ${kb(e.bytes)} KB`)
-          .join(', ');
-        existingText = `~${kb(breakdown.total)} KB total (largest: ${top})`;
-      }
-      const wrapped = new Error(
-        `your browser is blocking storage here — this write was only ~${kb(serialized.length)} KB, and everything already stored for this site totals ${existingText}, far too small to hit a normal quota, so something else about this browser/device is restricting it`
-      );
-      wrapped.quotaExceeded = true;
-      throw wrapped;
-    }
-    throw err;
-  }
-}
-
 function getSelected() {
-  return load(KEY_SELECTED, []);
+  return get(KEY_SELECTED, []);
 }
 
 function getCards() {
   // Defensive defaults for cards persisted before `phase`/`deleted` existed.
-  return load(KEY_CARDS, []).map((c) => ({
+  return get(KEY_CARDS, []).map((c) => ({
     ...c,
     phase: c.phase || 'review',
     deleted: c.deleted || 0,
@@ -133,11 +52,11 @@ function getCards() {
 }
 
 function getRecentlyWrong() {
-  return load(KEY_RECENTLY_WRONG, []);
+  return get(KEY_RECENTLY_WRONG, []);
 }
 
 function getAllPendingWords() {
-  return load(KEY_PENDING_WORDS, []);
+  return get(KEY_PENDING_WORDS, []);
 }
 
 /** Queued words, oldest-first — the order generateIntroBatch will
@@ -153,7 +72,7 @@ export function getPendingWords() {
  * a mistake batch, or the empty-state bootstrap). Validates against the
  * dictionary immediately so a typo is caught right away rather than
  * silently going nowhere later. */
-export function queueWord(rawWord) {
+export async function queueWord(rawWord) {
   const word = (rawWord || '').trim().toUpperCase();
   if (!word) return { ok: false, message: 'Enter a word.' };
   if (!/^[A-Z]+$/.test(word)) return { ok: false, message: 'Letters only.' };
@@ -179,7 +98,7 @@ export function queueWord(rawWord) {
   } else {
     pending.push({ word, added_at: nowIso, updated_at: nowIso, deleted: 0 });
   }
-  save(KEY_PENDING_WORDS, pending);
+  await set(KEY_PENDING_WORDS, pending);
   return { ok: true, word };
 }
 
@@ -219,7 +138,7 @@ export function getWordInfo(rawWord) {
   return { word, exists: true, added, roots: rootInfo, cards };
 }
 
-function consumePendingWords(words, nowIso) {
+async function consumePendingWords(words, nowIso) {
   if (words.length === 0) return;
   const consumed = new Set(words);
   const all = getAllPendingWords();
@@ -229,7 +148,7 @@ function consumePendingWords(words, nowIso) {
       p.updated_at = nowIso;
     }
   }
-  save(KEY_PENDING_WORDS, all);
+  await set(KEY_PENDING_WORDS, all);
 }
 
 /** A card's identity is fully determined by what it's made of (root word,
@@ -304,7 +223,7 @@ function addWordToStudy(word, now, phase, selected, selectedSet, cards) {
  * to picking randomly. Since a single root can produce several cards,
  * `minCards` is a floor, not a ceiling: the batch always finishes out
  * the root/word it's partway through rather than cutting it off mid-way. */
-export function generateIntroBatch(minCards = 50) {
+export async function generateIntroBatch(minCards = 50) {
   const now = new Date();
   const nowIso = now.toISOString();
   const selected = getSelected();
@@ -335,9 +254,9 @@ export function generateIntroBatch(minCards = 50) {
     roots.push(...result.newRoots);
   }
 
-  consumePendingWords(consumedPendingWords, nowIso);
-  save(KEY_SELECTED, selected);
-  save(KEY_CARDS, cards);
+  await consumePendingWords(consumedPendingWords, nowIso);
+  await set(KEY_SELECTED, selected);
+  await set(KEY_CARDS, cards);
   return { ok: cardsAdded > 0, cardsAdded, wordsAdded, roots };
 }
 
@@ -452,7 +371,7 @@ function pickWeightedByPriority(pool, nowMs) {
  * intro drilling together (same mechanism as a fresh batch of new words)
  * and the pile resets. Returns the updated card and, when the batch just
  * triggered, { cardCount }. */
-export function answerCard(id, correct) {
+export async function answerCard(id, correct) {
   const cards = getCards();
   const card = cards.find((c) => c.id === id);
   if (!card) return null;
@@ -490,10 +409,10 @@ export function answerCard(id, correct) {
       mistakeBatch = { cardCount };
       recentlyWrong = [];
     }
-    save(KEY_RECENTLY_WRONG, recentlyWrong);
+    await set(KEY_RECENTLY_WRONG, recentlyWrong);
   }
 
-  save(KEY_CARDS, cards);
+  await set(KEY_CARDS, cards);
   return { card, mistakeBatch };
 }
 
@@ -545,7 +464,7 @@ export function getChangedSince(since) {
 /** Merges rows pulled from the server into local storage. Last-write-wins
  * by `updated_at`, keyed by each table's natural identity — so applying
  * the same remote rows twice (e.g. after a retried push) is always safe. */
-export function mergeRemote({ selectedWords = [], cards = [], pendingWords = [] }) {
+export async function mergeRemote({ selectedWords = [], cards = [], pendingWords = [] }) {
   const selected = getSelected();
   const selectedByKey = new Map(selected.map((r) => [r.root_word, r]));
   for (const remote of selectedWords) {
@@ -554,7 +473,7 @@ export function mergeRemote({ selectedWords = [], cards = [], pendingWords = [] 
       selectedByKey.set(remote.root_word, remote);
     }
   }
-  save(KEY_SELECTED, [...selectedByKey.values()]);
+  await set(KEY_SELECTED, [...selectedByKey.values()]);
 
   const localCards = getCards();
   const cardsByKey = new Map(localCards.map((r) => [r.id, r]));
@@ -564,7 +483,7 @@ export function mergeRemote({ selectedWords = [], cards = [], pendingWords = [] 
       cardsByKey.set(remote.id, remote);
     }
   }
-  save(KEY_CARDS, [...cardsByKey.values()]);
+  await set(KEY_CARDS, [...cardsByKey.values()]);
 
   const localPending = getAllPendingWords();
   const pendingByKey = new Map(localPending.map((r) => [r.word, r]));
@@ -574,5 +493,5 @@ export function mergeRemote({ selectedWords = [], cards = [], pendingWords = [] 
       pendingByKey.set(remote.word, remote);
     }
   }
-  save(KEY_PENDING_WORDS, [...pendingByKey.values()]);
+  await set(KEY_PENDING_WORDS, [...pendingByKey.values()]);
 }

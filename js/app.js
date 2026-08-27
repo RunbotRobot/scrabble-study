@@ -14,6 +14,7 @@ import { initLookupUI } from './lookup-ui.js';
 import { imageHtmlFor } from './images.js';
 import { imageSubjectFor } from './dictionary.js';
 import { fetchVersion } from './version.js';
+import { initPersistence } from './idb-store.js';
 
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
@@ -243,18 +244,18 @@ async function appendQuotaDiagnostics(baseText) {
  * nothing). Surface that instead of failing silently, and recover by
  * loading whatever card *does* exist rather than leaving the answered
  * card frozen on screen. */
-function grade(correct) {
+async function grade(correct) {
   if (!currentCard) return;
   try {
-    const result = answerCard(currentCard.id, correct);
+    const result = await answerCard(currentCard.id, correct);
     if (!result) {
       throw new Error(`card ${currentCard.id} no longer exists locally`);
     }
     const { mistakeBatch } = result;
 
-    const { streak, milestoneHit } = recordAnswer(correct);
+    const { streak, milestoneHit } = await recordAnswer(correct);
     if (milestoneHit) {
-      const batchResult = generateIntroBatch(MILESTONE_EVERY);
+      const batchResult = await generateIntroBatch(MILESTONE_EVERY);
       showMilestoneMessage(
         batchResult.ok
           ? `🔥 ${streak} in a row! Added ${batchResult.cardsAdded} new card${batchResult.cardsAdded === 1 ? '' : 's'} across ${batchResult.wordsAdded} word${batchResult.wordsAdded === 1 ? '' : 's'} to learn.`
@@ -283,10 +284,10 @@ function grade(correct) {
 // A brand-new install has zero cards and no streak yet to trigger
 // generating any — so if it's still empty after we've had a chance to
 // pull down any existing cloud data, seed a first batch automatically.
-function bootstrapIfEmpty() {
+async function bootstrapIfEmpty() {
   if (getStats().totalCards > 0) return;
   try {
-    const result = generateIntroBatch(MILESTONE_EVERY);
+    const result = await generateIntroBatch(MILESTONE_EVERY);
     if (result.ok) {
       showMilestoneMessage(
         `Added ${result.cardsAdded} card${result.cardsAdded === 1 ? '' : 's'} across ${result.wordsAdded} word${
@@ -345,6 +346,12 @@ document.addEventListener('visibilitychange', () => {
     await loadDictionary();
   } catch (err) {
     studyCard.innerHTML = `<p class="card-empty">Failed to load dictionary: ${err.message}</p>`;
+    return;
+  }
+  try {
+    await initPersistence();
+  } catch (err) {
+    studyCard.innerHTML = `<p class="card-empty">Failed to open local storage: ${err.message}</p>`;
     return;
   }
   refreshStats();

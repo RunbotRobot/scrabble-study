@@ -110,9 +110,9 @@ export function initLookupUI(buttonEl, modalRootEl) {
 
     const addBtn = modalRootEl.querySelector('#lookup-add-btn');
     if (addBtn) {
-      addBtn.addEventListener('click', () => {
+      addBtn.addEventListener('click', async () => {
         try {
-          const result = queueWord(word);
+          const result = await queueWord(word);
           if (result.ok) scheduleSync();
           message = result.ok
             ? `Queued ${result.word} — it'll be added next time we earn more words.`

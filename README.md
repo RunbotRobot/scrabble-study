@@ -302,10 +302,11 @@ shrinks its ease, so missed cards resurface more often.
 
 ## Where your progress lives
 
-Every read/write always goes through this browser's `localStorage`
-first, so the app is fully usable offline and never blocks on the
-network. On top of that, a small Cloudflare Worker + D1 database (see
-`worker/`) acts as a durable backup and cross-device sync layer:
+Every read/write always goes through this browser's IndexedDB first
+(see `js/idb-store.js`), so the app is fully usable offline and never
+blocks on the network. On top of that, a small Cloudflare Worker + D1
+database (see `worker/`) acts as a durable backup and cross-device sync
+layer:
 
 - Open the **⚙** Options panel and tap **Start cloud sync**. This generates a
   random "sync code" (there's no account/password — the code itself is
@@ -326,23 +327,37 @@ network. On top of that, a small Cloudflare Worker + D1 database (see
 **Write your sync code down somewhere safe once you generate it** — it's
 the only way to link a second device or recover after losing this one.
 
-Even after months of daily use, this app's own `localStorage` data
-(cards, selected words, streak, sync id) stays in the tens-to-low-
-hundreds of KB — nowhere near a normal browser's multi-MB quota. So a
-"storage quota exceeded" error isn't this app writing too much; it's
-something about the browser/device itself (private browsing and a full
-device are the two most common causes, but not the only ones). The
-error message skips the generic "try reloading" advice other failures
-get, since reloading fixes none of those, and appends two things a
-moment/character later: `localStorage`'s own actual usage (summed
-across every key at this origin, not just this app's) at the moment of
-the failure, and — where the browser supports it —
-`navigator.storage.estimate()`'s usage-vs-quota numbers. The latter is
-**not** the same budget as `localStorage`'s: Chrome enforces its own,
-separate, much smaller quota for `localStorage` specifically that
-`estimate()` doesn't report at all (it covers IndexedDB/Cache API, a
-different storage bucket), so a large "allowed" figure there doesn't
-rule out `localStorage` itself being the thing that's constrained.
+This app used to store everything directly in `localStorage`, which
+turned out to be a bad fit specifically because it's hosted on GitHub
+Pages: `localStorage` is shared per *origin*, not per site/path, so
+every project under `runbotrobot.github.io` — this one, and any other
+unrelated app — draws from the exact same small (historically ~5MB)
+quota. One app filling it starves every other app at that origin
+regardless of how little any individual app writes, which is exactly
+what happened here (another project's page was writing several MB into
+that shared bucket). `js/idb-store.js` now persists everything in
+IndexedDB instead — a separate, much larger quota (see
+`navigator.storage.estimate()`) that isn't susceptible to the same
+collision. The first time this runs on a browser that still has data
+under the old `localStorage` keys, it's migrated into IndexedDB once
+and then removed from `localStorage`, so it stops competing for that
+shared quota too; any other app's keys there are left untouched.
+
+IndexedDB is inherently asynchronous, but this app's data is small
+enough to keep entirely in memory once loaded — so the design is:
+await one async load at startup, then read/write the in-memory copy
+synchronously from there (writes also flush through to IndexedDB in
+the background), rather than threading `async`/`await` through every
+single read across the whole app.
+
+A "storage quota exceeded" error is still possible in principle — this
+app's own data stays in the tens-to-low-hundreds of KB even after
+months of daily use, nowhere near IndexedDB's typical multi-GB quota —
+but now that quota is the same one `navigator.storage.estimate()`
+reports, so that diagnostic (shown in the error message, appended a
+moment after it renders since the check itself is async) is actually
+meaningful here, unlike it was for `localStorage`'s own separate,
+unrelated quota.
 
 Two things are intentionally **not** synced, since they're per-device
 session bookkeeping rather than study data: your current correct-answer
@@ -409,9 +424,12 @@ which is keyless).
   - `js/srs.js` — the spaced-repetition scheduler.
   - `js/streak.js` — tracks the consecutive-correct streak and its
     every-50 milestones.
-  - `js/store.js` — persists selected words + cards + SRS state +
-    queued words in `localStorage`; batch generation, intro-vs-review
-    card selection, and the merge primitives `js/sync.js` uses.
+  - `js/idb-store.js` — the async-loaded, sync-thereafter IndexedDB
+    key/value layer everything else in this list persists through (see
+    "Where your progress lives" above).
+  - `js/store.js` — selected words + cards + SRS state + queued words;
+    batch generation, intro-vs-review card selection, and the merge
+    primitives `js/sync.js` uses.
   - `js/sync.js` — cloud backup/sync engine (push/pull against the
     worker, last-write-wins merge, retry-friendly).
   - `js/images.js` — builds a root word's illustration URL (see "Root

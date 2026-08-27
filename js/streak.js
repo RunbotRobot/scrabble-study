@@ -4,22 +4,24 @@
  * to trigger generating a fresh batch of flashcards — see js/app.js.
  */
 
+import { get, set } from './idb-store.js';
+
 const KEY_STREAK = 'scrabbleStudy.streak';
 export const MILESTONE_EVERY = 50;
 
 export function getStreak() {
-  return Number(localStorage.getItem(KEY_STREAK) || 0);
+  return Number(get(KEY_STREAK, 0));
 }
 
 function setStreak(n) {
-  localStorage.setItem(KEY_STREAK, String(n));
+  return set(KEY_STREAK, n);
 }
 
 /** Call after every graded answer. Returns the new streak and whether it
  * just crossed a fresh multiple of MILESTONE_EVERY. */
-export function recordAnswer(correct) {
+export async function recordAnswer(correct) {
   const streak = correct ? getStreak() + 1 : 0;
-  setStreak(streak);
+  await setStreak(streak);
   const milestoneHit = correct && streak % MILESTONE_EVERY === 0;
   return { streak, milestoneHit };
 }

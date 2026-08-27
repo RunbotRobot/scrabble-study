@@ -281,22 +281,40 @@ async function generateWithGemini(prompt, apiKey) {
   }
 }
 
-/** Temporary diagnostic aid (see ?debug=1) — repeats the Gemini call
- * without swallowing the error, so a failure can actually be seen
- * instead of just falling through to a generic 502. */
-async function debugGemini(prompt, apiKey) {
+/** Temporary diagnostic aid (see ?debug=1[&model=...][&legacy=1]) —
+ * repeats the Gemini call without swallowing the error, so a failure can
+ * actually be seen instead of just falling through to a generic 502.
+ * `legacy=1` tries the older generateContent endpoint instead of the
+ * newer Interactions API, for comparing which one (and which model) has
+ * an actual free-tier quota. */
+async function debugGemini(prompt, apiKey, model, legacy) {
   if (!apiKey) return { configured: false };
   try {
+    if (legacy) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+          }),
+        }
+      );
+      const bodyText = await res.text();
+      return { configured: true, endpoint: 'generateContent', model, status: res.status, body: bodyText.slice(0, 1500) };
+    }
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
-        model: 'gemini-3.1-flash-lite-image',
+        model,
         input: [{ type: 'text', text: prompt }],
       }),
     });
     const bodyText = await res.text();
-    return { configured: true, status: res.status, body: bodyText.slice(0, 1500) };
+    return { configured: true, endpoint: 'interactions', model, status: res.status, body: bodyText.slice(0, 1500) };
   } catch (err) {
     return { configured: true, exception: String(err) };
   }
@@ -315,9 +333,11 @@ async function handleImage(request, env, word) {
   }
 
   const prompt = new URL(request.url).searchParams.get('prompt') || word;
-  const debug = new URL(request.url).searchParams.get('debug') === '1';
-  if (debug) {
-    const gemini = await debugGemini(prompt, env.GEMINI_API_KEY);
+  const params = new URL(request.url).searchParams;
+  if (params.get('debug') === '1') {
+    const model = params.get('model') || 'gemini-3.1-flash-lite-image';
+    const legacy = params.get('legacy') === '1';
+    const gemini = await debugGemini(prompt, env.GEMINI_API_KEY, model, legacy);
     return json({ gemini });
   }
   const generated =

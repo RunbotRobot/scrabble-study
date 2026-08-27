@@ -287,7 +287,7 @@ async function generateWithGemini(prompt, apiKey) {
  * `legacy=1` tries the older generateContent endpoint instead of the
  * newer Interactions API, for comparing which one (and which model) has
  * an actual free-tier quota. */
-async function debugGemini(prompt, apiKey, model, legacy) {
+async function debugGemini(prompt, apiKey, model, legacy, textOnly) {
   if (!apiKey) return { configured: false };
   try {
     if (legacy) {
@@ -296,10 +296,14 @@ async function debugGemini(prompt, apiKey, model, legacy) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-          }),
+          body: JSON.stringify(
+            textOnly
+              ? { contents: [{ parts: [{ text: prompt }] }] }
+              : {
+                  contents: [{ parts: [{ text: prompt }] }],
+                  generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+                }
+          ),
         }
       );
       const bodyText = await res.text();
@@ -337,7 +341,8 @@ async function handleImage(request, env, word) {
   if (params.get('debug') === '1') {
     const model = params.get('model') || 'gemini-3.1-flash-lite-image';
     const legacy = params.get('legacy') === '1';
-    const gemini = await debugGemini(prompt, env.GEMINI_API_KEY, model, legacy);
+    const textOnly = params.get('textonly') === '1';
+    const gemini = await debugGemini(prompt, env.GEMINI_API_KEY, model, legacy, textOnly);
     return json({ gemini });
   }
   const generated =

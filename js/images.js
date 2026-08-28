@@ -6,14 +6,23 @@ import { WORKER_URL } from './sync.js';
  * once cached, it's ignored. Images are global/shared, not per sync ID —
  * the same word always gets the same picture for everyone.
  *
- * The word itself is folded into the generation prompt (not just the
- * bare definition) — a dictionary gloss like "to find fault
- * incessantly" is abstract enough on its own that an image model has
- * nothing concrete to latch onto, so pairing it with the word gives it
- * more to work with. */
+ * Pollinations' free tier currently only serves one underlying model
+ * (Sana — its documented `model=` param for flux/turbo/etc. is silently
+ * ignored, confirmed by requesting both and diffing the bytes). Left to
+ * its own devices it strongly favors rendering human faces/figures for
+ * abstract prompts, including a real, repeatable tendency toward
+ * generating nudity for entirely G-rated definitions (verified
+ * directly — not a one-off) — and it doesn't reliably honor negative
+ * instructions like "no nudity" stated in the prompt, so the fix isn't
+ * asking it not to. Steering the prompt toward a concrete inanimate
+ * object instead — described as product photography, not "an
+ * illustration of" — sidesteps the figure-rendering bias close to
+ * entirely instead of fighting it head-on, as a side effect also
+ * reading as far more literal than the moody/painterly default style. */
 export function imageUrlFor(word, definition) {
   const url = `${WORKER_URL}/image/${encodeURIComponent(word)}`;
-  const prompt = definition ? `${word}: ${definition}` : word;
+  const subject = definition ? `${word}: ${definition}` : word;
+  const prompt = `A single inanimate object as a visual metaphor for: ${subject}. Still life product photography, plain background, no people, no faces, no human body`;
   return `${url}?prompt=${encodeURIComponent(prompt)}`;
 }
 

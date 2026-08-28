@@ -215,8 +215,24 @@ same as OTHERWORD" (e.g. `STOTT`'s is literally "to stot", pointing at
 `STOT`) — gets OTHERWORD's own definition folded in too when it has one
 ("to stot (to bound with a stiff-legged gait)"), since OTHERWORD is
 often just as obscure a Scrabble word as the one being illustrated. If a
-generated image still turns out nonsensical, `DELETE /image/:word`
-evicts the cached copy so the next view regenerates it.
+generated image still turns out nonsensical (or, worse, inappropriate —
+see below), `DELETE /image/:word` evicts the cached copy so the next
+view regenerates it.
+
+Pollinations' free tier currently serves exactly one underlying image
+model (Sana — its documented `model=` param for flux/turbo/etc. is
+silently ignored; confirmed by requesting both and diffing the bytes,
+not just trusting the docs). Left to describe an abstract definition
+directly, it strongly favors rendering human faces/figures, including a
+real, repeatable tendency toward outright nudity for entirely G-rated
+definitions — verified directly, more than once, not a hypothetical —
+and it doesn't reliably honor negative instructions like "no nudity"
+stated in the prompt, so asking it not to isn't a fix. The prompt
+instead steers toward a concrete inanimate object described as *product
+photography*, not "an illustration of" — framing that sidesteps the
+figure-rendering bias close to entirely rather than fighting it head-on,
+and as a side effect reads as far more literal than the moody,
+painterly style a bare definition prompt tends to produce.
 
 Generating a word's first-ever image is a real few-second wait, not
 instant — an `<img>` alone during that stretch just looks broken (an

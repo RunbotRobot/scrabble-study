@@ -1,6 +1,6 @@
 import { getWordInfo, queueWord, describeStorageQuota } from './store.js';
 import { scheduleSync } from './sync.js';
-import { imageHtmlFor } from './images.js';
+import { imageSlotHtml, mountImageSlots } from './images.js';
 import { imageSubjectFor } from './dictionary.js';
 
 const CARD_TYPE_LABELS = {
@@ -18,7 +18,7 @@ function renderRoot(r) {
   // text above (see dictionary.js) — fine for the image prompt, which
   // doesn't need to match the displayed definition word-for-word.
   const imageSubject = r.senses.length > 0 ? imageSubjectFor(r.root) : null;
-  const imageMarkup = imageSubject ? imageHtmlFor(r.root, imageSubject.definition) : '';
+  const imageMarkup = imageSubject ? imageSlotHtml(r.root, imageSubject.definition) : '';
   return `
     <div class="lookup-root">
       <div class="lookup-root-name">${r.root}</div>
@@ -96,6 +96,7 @@ export function initLookupUI(buttonEl, modalRootEl) {
         </div>
       </div>
     `;
+    mountImageSlots(modalRootEl);
 
     const overlay = modalRootEl.querySelector('.lookup-overlay');
     overlay.addEventListener('click', (e) => {

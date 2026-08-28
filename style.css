@@ -199,86 +199,87 @@ button.secondary {
   font-weight: 500;
 }
 
-/* Wraps an illustration together with a loading indicator (see
-   js/images.js's imageHtmlFor) — sized here rather than on .wd-image
-   itself, since the progress bar needs to fill the same box while the
-   image underneath is still just a transparent, unsized <img>. */
+/* Wraps a root's illustration slot (see js/images.js's mountImageSlots)
+   — either the picture itself once one's been uploaded, a brief
+   "checking" skeleton while that's being determined, or the copy-
+   prompt/paste-a-picture flow when there isn't one yet. */
 .wd-image-wrap {
-  position: relative;
   display: block;
   width: 100%;
   max-width: 160px;
-  aspect-ratio: 1;
   margin-top: 0.6rem;
+}
+
+.wd-image-checking {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--tile-border) 25%, var(--tile) 50%, var(--tile-border) 75%);
+  background-size: 200% 100%;
+  animation: blur-shimmer 1.8s ease-in-out infinite;
 }
 
 .wd-image {
   display: block;
   width: 100%;
-  height: 100%;
+  aspect-ratio: 1;
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--border);
-  opacity: 0;
-  transition: opacity 0.25s ease;
 }
 
-.wd-image-wrap.wd-image-loaded .wd-image { opacity: 1; }
-
-/* First view of a not-yet-generated word can take several real seconds
-   (see js/images.js) — an empty box with nothing happening reads as
-   broken, so this fills toward a deliberately generous guess at the
-   longest case and eases off short of 100%, as a "still working"
-   signal rather than a real ETA. Snaps to done (or a quiet failure
-   state) as soon as the image actually settles, whichever comes first. */
-.wd-image-progress {
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--tile);
-  overflow: hidden;
+.wd-image-replace-btn {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-.wd-image-progress-bar {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 4px;
-  width: 0%;
-  background: var(--accent);
-  animation: wd-image-progress 15s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
-}
-
-@keyframes wd-image-progress {
-  from { width: 0%; }
-  to { width: 92%; }
-}
-
-.wd-image-wrap.wd-image-loaded .wd-image-progress,
-.wd-image-wrap.wd-image-failed .wd-image-progress {
-  display: none;
-}
-
-/* Shown only once generation has actually failed (see .wd-image-failed
-   below) — visibly distinct from the box just vanishing, which reads
-   as the app glitching rather than a word that isn't illustrated yet. */
-.wd-image-error {
-  display: none;
-  position: absolute;
-  inset: 0;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 0.5rem;
-  border-radius: 8px;
+/* The "no picture yet" state: copy a ready-made prompt for an outside
+   image generator (Gemini, say — this app never calls one itself, see
+   README), then paste or choose whatever comes back. */
+.wd-image-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
   border: 1px dashed var(--border);
-  color: var(--muted);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.wd-image-copy-btn,
+.wd-image-choose-btn {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.wd-image-paste-zone {
+  border: 1px dashed var(--tile-border);
+  border-radius: 6px;
+  padding: 0.6rem;
+  text-align: center;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
 }
 
-.wd-image-wrap.wd-image-failed .wd-image-error { display: flex; }
+.wd-image-paste-zone:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  color: var(--ink);
+}
+
+.wd-image-upload-status {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.wd-image-upload-status:empty { display: none; }
 
 /* A jumble can have several valid solutions, each with its own picture
    — laid out in a wrapping row rather than stacked, so they read as a

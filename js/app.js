@@ -11,7 +11,7 @@ import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
-import { imageHtmlFor } from './images.js';
+import { imageSlotHtml, mountImageSlots } from './images.js';
 import { imageSubjectFor } from './dictionary.js';
 import { fetchVersion } from './version.js';
 import { initPersistence } from './idb-store.js';
@@ -73,7 +73,7 @@ function renderJumbleImages(card) {
     subjects.push(subject);
   }
   if (subjects.length === 0) return '';
-  const imgs = subjects.map(({ root, definition }) => imageHtmlFor(root, definition)).join('');
+  const imgs = subjects.map(({ root, definition }) => imageSlotHtml(root, definition)).join('');
   return `<div class="jumble-images">${imgs}</div>`;
 }
 
@@ -135,7 +135,7 @@ function renderWordDefCard(card, revealed) {
   // can afford a richer prompt when the root's definition alone is a
   // thin same-as-another-word pointer.
   const imageSubject = imageSubjectFor(word);
-  const imageContent = definitionVisible && imageSubject ? imageHtmlFor(word, imageSubject.definition) : '';
+  const imageContent = definitionVisible && imageSubject ? imageSlotHtml(word, imageSubject.definition) : '';
   return `
     <div class="word-def-row">
       <div class="wd-slot">
@@ -203,6 +203,7 @@ function loadNextCard() {
     ${renderCardBody(card, false)}
     <button id="show-answer-btn" class="secondary">Show answer</button>
   `;
+  mountImageSlots(studyCard);
   document.getElementById('show-answer-btn').addEventListener('click', showAnswer);
 }
 
@@ -216,6 +217,7 @@ function showAnswer() {
       <button class="grade-correct">Got it right</button>
     </div>
   `;
+  mountImageSlots(studyCard);
   studyCard.querySelector('.grade-correct').addEventListener('click', () => grade(true));
   studyCard.querySelector('.grade-incorrect').addEventListener('click', () => grade(false));
 }

@@ -195,76 +195,58 @@ picture instead of generating its own.
 
 ## Root word images
 
-Each root with a definition gets a small illustration generated from
-that definition — shown on word2def/def2word cards (see "Card
-presentation" above), on jumble cards (see above), and in the lookup
-panel. Images are free to generate (via
-[Pollinations.ai](https://pollinations.ai), which needs no API key) and
-shared globally rather than per-device: the worker's `GET /image/:word`
-endpoint generates an image on the first request for a given word and
-caches it in Cloudflare R2 forever after, so every device — and every
-other word that happens to share a root — benefits from that one
-generation. Roots with no definition on file don't get an image; there's
-nothing meaningful to illustrate. The generation prompt pairs the word
-with its definition rather than sending the bare definition alone — a
-gloss like "to find fault incessantly" (`NAG`) is abstract enough on its
-own that the model has nothing concrete to anchor on, so it can come out
-looking unrelated to the word entirely. A definition that's nothing but
-"(a/an/to) OTHERWORD" — the dictionary source's shorthand for "means the
-same as OTHERWORD" (e.g. `STOTT`'s is literally "to stot", pointing at
-`STOT`) — gets OTHERWORD's own definition folded in too when it has one
-("to stot (to bound with a stiff-legged gait)"), since OTHERWORD is
-often just as obscure a Scrabble word as the one being illustrated. If a
-generated image still turns out nonsensical (or, worse, inappropriate —
-see below), `DELETE /image/:word` evicts the cached copy so the next
-view regenerates it.
+Each root with a definition gets a small illustration slot — shown on
+word2def/def2word cards (see "Card presentation" above), on jumble
+cards (see above), and in the lookup panel. Nothing in this app calls
+an image-generation API itself: every free option tried was a dead
+end, one way or another —
 
-Pollinations' free tier currently serves exactly one underlying image
-model (Sana — its documented `model=` param for flux/turbo/etc. is
-silently ignored; confirmed by requesting both and diffing the bytes,
-not just trusting the docs). Left to describe an abstract definition
-directly, it strongly favors rendering human faces/figures, including a
-real, repeatable tendency toward outright nudity for entirely G-rated
-definitions — verified directly, more than once, not a hypothetical —
-and it doesn't reliably honor negative instructions like "no nudity"
-stated in the prompt, so asking it not to isn't a fix. The prompt
-instead steers toward a concrete inanimate object described as *product
-photography*, not "an illustration of" — framing that sidesteps the
-figure-rendering bias close to entirely rather than fighting it head-on,
-and as a side effect reads as far more literal than the moody,
-painterly style a bare definition prompt tends to produce.
+- **Pollinations.ai** was free and keyless, but its free tier turns out
+  to serve exactly one underlying model (Sana — its documented `model=`
+  param for flux/turbo/etc. is silently ignored, confirmed by
+  requesting both and diffing the bytes, not just trusting the docs).
+  Left to describe an abstract dictionary definition directly, it
+  strongly favors rendering human faces/figures, including a real,
+  repeatable tendency toward outright nudity for entirely G-rated
+  definitions — verified directly, more than once, not a hypothetical —
+  and doesn't reliably honor negative instructions like "no nudity"
+  stated in the prompt. Framing the prompt around a concrete inanimate
+  object ("product photography of X," not "an illustration of X")
+  mostly sidestepped it, but "mostly" isn't good enough odds for
+  something generating unprompted, uncensored images.
+- **Gemini's API** free tier reports a request limit of **0** for every
+  image-capable model, confirmed directly against a real key via the
+  API's own error responses — image generation there currently requires
+  a billed Google Cloud project, not just an API key.
+- **Hugging Face's Inference Providers** free tier is real but tiny
+  ($0.10/month in credits) — nowhere near enough to keep up with adding
+  50 words at a time.
 
-Generating a word's first-ever image is a real few-second wait, not
-instant — an `<img>` alone during that stretch just looks broken (an
-empty box, no sign anything's happening). Every illustration shows a
-loading bar first, filling toward a deliberately generous guess at the
-longest case and easing off short of full rather than stalling dead —
-it's a "still working" signal, not a real ETA — then swaps to the
-actual image, or a small "picture unavailable" placeholder on failure
-(rather than the box just vanishing, which reads as a glitch). A failed
-generation is never cached, so the next view tries again from scratch.
+So image generation here is a manual step instead: for a root with no
+picture yet, its slot shows a **Copy Gemini prompt** button — copies a
+ready-made prompt (word + definition, worded to read as a plain literal
+illustration) to your clipboard — plus a place to paste or choose the
+picture you get back from generating it yourself, in Gemini's own app
+or anything else. That upload goes to the worker's `PUT /image/:word`
+(raw image bytes, `Content-Type: image/*`) and is cached in Cloudflare
+R2 forever after, shared globally rather than per-device — every other
+device, and every other word that happens to share a root, benefits
+from that one upload. `GET /image/:word` 404s until something's been
+uploaded (nothing is ever generated automatically); `DELETE
+/image/:word` evicts a cached image, e.g. to redo one you're not happy
+with — the slot's own "Replace image" button does this for you. Roots
+with no definition on file get no image slot at all; there's nothing
+meaningful to illustrate.
 
-It's safe to keep studying while an image is mid-generation — moving on
-before it loads doesn't waste the attempt. The worker registers the
-generate-and-cache step with `ctx.waitUntil()`, so the platform keeps it
-running to completion (and still writes it to R2) even if your browser
-has already disconnected from that particular request by the time it
-finishes.
-
-Pollinations alone can't keep up with a 50-word batch (it rate-limits
-bursts). A Gemini API fallback for exactly that case was investigated
-and built, then pulled back out: every image-capable Gemini model
-(`gemini-3.1-flash-lite-image`, `gemini-2.5-flash-image`, ...) reports a
-**free-tier request limit of 0** — confirmed directly against a real key
-via the API's own error responses. Text-only Gemini models work fine on
-the same key's free tier; image *output* specifically requires a billed
-Google Cloud project right now, not just an API key, so it wasn't the
-free option it looked like on paper. The deploy workflow still wires a
-`GEMINI_API_KEY` repo secret into the worker if one's set (see
-`.github/workflows/deploy-worker.yml`), in case Google's free tier for
-image models changes — but nothing currently reads it. Until then,
-rate-limited words just fill in the next time they're requested, same as
-any cache miss.
+Each slot (`js/images.js`'s `mountImageSlots`) checks whether a picture
+already exists (a quick, near-instant `GET`, unlike the old
+auto-generate-on-miss design — no reason for a progress bar anymore)
+and shows one of two things: the image itself, or the copy-prompt/
+paste-a-picture flow. Pasting an image (`Ctrl+V`/`Cmd+V` after clicking
+the paste zone) or choosing a file both `PUT` the bytes straight to the
+worker; a preview shows immediately via `URL.createObjectURL()` rather
+than waiting on a round-trip re-fetch. An upload failure shows inline
+next to the paste zone rather than failing silently.
 
 ## Options panel and looking up a word
 
@@ -423,8 +405,8 @@ settings:
 The D1 database (`scrabble-study-db`) and its schema already exist —
 `worker/wrangler.toml` references it by ID, so a fresh deploy just picks
 it back up. Same for the `scrabble-study-images` R2 bucket the image
-endpoint reads/writes (no API key needed — it calls Pollinations.ai,
-which is keyless).
+endpoint reads/writes/deletes — no API key needed, since nothing here
+calls an image-generation service (see "Root word images").
 
 ## Project layout
 
@@ -448,8 +430,8 @@ which is keyless).
     primitives `js/sync.js` uses.
   - `js/sync.js` — cloud backup/sync engine (push/pull against the
     worker, last-write-wins merge, retry-friendly).
-  - `js/images.js` — builds a root word's illustration URL (see "Root
-    word images" above).
+  - `js/images.js` — the copy-prompt/paste-a-picture illustration
+    slots (see "Root word images" above).
   - `js/sync-ui.js` — the Cloud sync panel.
   - `js/lookup-ui.js` — the "?" word lookup panel.
   - `js/app.js` — UI wiring.

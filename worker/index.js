@@ -236,12 +236,24 @@ async function handleSync(request, env) {
   });
 }
 
+/** `/image/:word` is a *mutable* URL — PUT replaces that word's picture,
+ * DELETE evicts it — so it must not be cached as immutable, however
+ * unchanging any one picture looks. It was, once
+ * (`max-age=31536000, immutable`), and the cost only showed up on the
+ * day a picture actually changed: every browser that had already
+ * displayed one kept serving those exact bytes for up to a year, with
+ * `immutable` suppressing even the revalidation a reload would normally
+ * force. A replaced image went on showing the old one and a deleted
+ * image went on showing at all, with nothing the server could say to
+ * correct it. `no-cache` still lets the browser *store* the bytes; it
+ * just has to revalidate before reusing them, which the ETag below
+ * settles with a 304 whenever the picture really hasn't changed. */
 const IMAGE_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=31536000, immutable',
+  'Cache-Control': 'no-cache',
   ...CORS_HEADERS,
 };
 
-async function handleImage(env, word) {
+async function handleImage(request, env, word) {
   if (!WORD_RE.test(word)) {
     return json({ error: 'Invalid word' }, 400);
   }
@@ -249,8 +261,14 @@ async function handleImage(env, word) {
   if (!existing) {
     return json({ error: 'No image yet' }, 404);
   }
+  const etag = existing.httpEtag;
+  if (etag && request.headers.get('If-None-Match') === etag) {
+    return new Response(null, { status: 304, headers: { ETag: etag, ...IMAGE_CACHE_HEADERS } });
+  }
   const contentType = existing.httpMetadata?.contentType || 'image/jpeg';
-  return new Response(existing.body, { headers: { 'Content-Type': contentType, ...IMAGE_CACHE_HEADERS } });
+  return new Response(existing.body, {
+    headers: { 'Content-Type': contentType, ...(etag ? { ETag: etag } : {}), ...IMAGE_CACHE_HEADERS },
+  });
 }
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -307,7 +325,7 @@ export default {
     const imageMatch = url.pathname.match(/^\/image\/([^/]+)$/);
     if (imageMatch && request.method === 'GET') {
       try {
-        return await handleImage(env, decodeURIComponent(imageMatch[1]));
+        return await handleImage(request, env, decodeURIComponent(imageMatch[1]));
       } catch (err) {
         return json({ error: `Internal error: ${err.message}` }, 500);
       }

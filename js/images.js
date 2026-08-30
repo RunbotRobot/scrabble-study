@@ -1,11 +1,26 @@
 import { WORKER_URL } from './sync.js';
 
+/** One-time cache-buster, and hopefully the last one. The image
+ * endpoint used to answer with `max-age=31536000, immutable`, which was
+ * simply untrue of a URL that PUT replaces and DELETE evicts: browsers
+ * that had displayed a picture were entitled to keep serving those
+ * bytes for a year without ever asking again, so the whole original set
+ * of generated images stayed visible on exactly the devices that had
+ * seen them even after being deleted server-side. The worker now sends
+ * `no-cache` (see IMAGE_CACHE_HEADERS there), but that only governs
+ * responses it still gets asked for — an entry already stored as
+ * immutable is unreachable by any header, and a *different URL* is the
+ * only thing that dislodges it. Bumping this number gives every word a
+ * cache key no browser has an old entry under. Nothing should need to
+ * bump it again now that the endpoint revalidates. */
+const IMAGE_CACHE_BUST = 2;
+
 /** URL for a root word's cached illustration — 404s until one's been
  * uploaded (see mountImageSlots). Images are global/shared, not per
  * sync ID — the same word always gets the same picture for everyone,
  * from whoever generated and uploaded it first. */
 export function imageUrlFor(word) {
-  return `${WORKER_URL}/image/${encodeURIComponent(word)}`;
+  return `${WORKER_URL}/image/${encodeURIComponent(word)}?v=${IMAGE_CACHE_BUST}`;
 }
 
 /** Text to copy into Gemini (or any other image generator) — this app

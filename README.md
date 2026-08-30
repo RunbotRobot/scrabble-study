@@ -228,15 +228,31 @@ ready-made prompt (word + definition, worded to read as a plain literal
 illustration) to your clipboard — plus a place to paste or choose the
 picture you get back from generating it yourself, in Gemini's own app
 or anything else. That upload goes to the worker's `PUT /image/:word`
-(raw image bytes, `Content-Type: image/*`) and is cached in Cloudflare
-R2 forever after, shared globally rather than per-device — every other
-device, and every other word that happens to share a root, benefits
-from that one upload. `GET /image/:word` 404s until something's been
-uploaded (nothing is ever generated automatically); `DELETE
-/image/:word` evicts a cached image, e.g. to redo one you're not happy
-with — the slot's own "Replace image" button does this for you. Roots
-with no definition on file get no image slot at all; there's nothing
-meaningful to illustrate.
+(raw image bytes, `Content-Type: image/*`) and is stored in Cloudflare
+R2, shared globally rather than per-device — every other device, and
+every other word that happens to share a root, benefits from that one
+upload. `GET /image/:word` 404s until something's been uploaded
+(nothing is ever generated automatically); `DELETE /image/:word` evicts
+a stored image, e.g. to redo one you're not happy with. The slot's own
+"Replace image" button doesn't call that — it just reopens the
+upload UI, and the replacement `PUT` overwrites in place — so `DELETE`
+is for genuinely removing a picture rather than swapping it.
+
+Those URLs are cached with `no-cache` plus an ETag: the browser may
+store the bytes but has to revalidate before reusing them, which is a
+cheap 304 whenever the picture hasn't changed. That matters because
+`/image/:word` is *mutable* — the same URL answers differently after a
+`PUT` or `DELETE`. It was originally served as
+`max-age=31536000, immutable`, which was a promise the endpoint
+couldn't keep: when the entire first generation of images was deleted,
+every browser that had displayed one went on showing it anyway, with
+`immutable` suppressing even a reload's revalidation and no header able
+to reach an entry already stored under it. Dislodging those needed a
+new URL, hence the `?v=` on `imageUrlFor` (`js/images.js`) — a one-time
+bump, not a per-image version.
+
+Roots with no definition on file get no image slot at all; there's
+nothing meaningful to illustrate.
 
 Each slot (`js/images.js`'s `mountImageSlots`) checks whether a picture
 already exists (a quick, near-instant `GET`, unlike the old

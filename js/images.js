@@ -50,16 +50,83 @@ export function imageSlotHtml(word, definition) {
   `;
 }
 
+/** Whether the one-tap "Paste image" button is worth showing. The
+ * async clipboard API is the only way to *pull* an image off the
+ * clipboard on a phone; without it the only paste route is the
+ * browser's own long-press menu over an editable element (see
+ * PASTE_ZONE_HINT). Secure-context only, which the deployed site is. */
+const CAN_READ_CLIPBOARD = typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function';
+
+const PASTE_ZONE_HINT = CAN_READ_CLIPBOARD
+  ? 'or long-press here and pick Paste'
+  : 'Tap here, then paste an image';
+
 function missingStateHtml() {
   return `
     <div class="wd-image-add">
       <button type="button" class="wd-image-copy-btn secondary">Copy Gemini prompt</button>
-      <div class="wd-image-paste-zone" tabindex="0">Click here, then paste an image (Ctrl+V)</div>
+      ${CAN_READ_CLIPBOARD ? '<button type="button" class="wd-image-paste-btn secondary">Paste image</button>' : ''}
+      <div
+        class="wd-image-paste-zone"
+        contenteditable="true"
+        role="textbox"
+        spellcheck="false"
+        aria-label="Paste an image here"
+        data-placeholder="${escapeAttr(PASTE_ZONE_HINT)}"
+      ></div>
       <button type="button" class="wd-image-choose-btn secondary">Choose a file</button>
       <input type="file" accept="image/*" class="wd-image-file-input" hidden />
       <p class="wd-image-upload-status"></p>
     </div>
   `;
+}
+
+/** Pulls whatever image is on the clipboard and uploads it — the phone
+ * path, where there's no Ctrl+V and the long-press menu is the only
+ * alternative. Must call navigator.clipboard.read() *before* awaiting
+ * anything else: Safari only honours it while the tap that triggered it
+ * still counts as user activation, and an intervening await spends
+ * that. */
+async function pasteFromClipboard(wrapEl) {
+  const statusEl = wrapEl.querySelector('.wd-image-upload-status');
+  const word = wrapEl.dataset.imageWord;
+  let items;
+  try {
+    items = await navigator.clipboard.read();
+  } catch (err) {
+    // NotAllowedError covers both a denied permission prompt and a
+    // gesture the browser decided had expired; neither is worth a
+    // stack trace at someone trying to add a picture.
+    statusEl.textContent =
+      err.name === 'NotAllowedError'
+        ? "⚠️ The browser wouldn't share the clipboard. Long-press the box below and pick Paste, or choose a file."
+        : `⚠️ Couldn't read the clipboard: ${err.message}`;
+    return;
+  }
+  for (const item of items) {
+    const type = item.types.find((t) => t.startsWith('image/'));
+    if (!type) continue;
+    await uploadImage(word, await item.getType(type), wrapEl);
+    return;
+  }
+  statusEl.textContent = 'No image on the clipboard — copy one in Gemini first.';
+}
+
+/** Recovers an image that a paste dropped into the editable box as
+ * markup rather than handing over on the event. Safari in particular
+ * will happily insert an <img src="blob:..."> and leave
+ * clipboardData.items empty, so the picture is *there*, just not where
+ * the paste handler looked for it. */
+async function imageFromPasteZone(zoneEl) {
+  const img = zoneEl.querySelector('img');
+  if (!img?.src) return null;
+  try {
+    const res = await fetch(img.src);
+    const blob = await res.blob();
+    return blob.type.startsWith('image/') ? blob : null;
+  } catch {
+    return null;
+  }
 }
 
 async function uploadImage(word, file, wrapEl) {
@@ -99,6 +166,9 @@ function wireMissing(wrapEl) {
     }, 1500);
   });
 
+  const pasteBtn = wrapEl.querySelector('.wd-image-paste-btn');
+  if (pasteBtn) pasteBtn.addEventListener('click', () => pasteFromClipboard(wrapEl));
+
   const fileInput = wrapEl.querySelector('.wd-image-file-input');
   wrapEl.querySelector('.wd-image-choose-btn').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
@@ -106,11 +176,29 @@ function wireMissing(wrapEl) {
     if (file) uploadImage(word, file, wrapEl);
   });
 
-  wrapEl.querySelector('.wd-image-paste-zone').addEventListener('paste', (e) => {
+  const zone = wrapEl.querySelector('.wd-image-paste-zone');
+  zone.addEventListener('paste', (e) => {
     const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
-    if (!item) return;
-    e.preventDefault();
-    uploadImage(word, item.getAsFile(), wrapEl);
+    if (item) {
+      e.preventDefault();
+      uploadImage(word, item.getAsFile(), wrapEl);
+      return;
+    }
+    // Nothing usable on the event itself — but the box is editable, so
+    // the paste may still land in it as markup a tick from now (see
+    // imageFromPasteZone). Let it, look again, then empty the box
+    // either way so a stray screenful of pasted text can't sit there
+    // looking like it did something.
+    setTimeout(async () => {
+      const blob = await imageFromPasteZone(zone);
+      zone.replaceChildren();
+      if (blob) uploadImage(word, blob, wrapEl);
+    }, 0);
+  });
+  // Enter in a contenteditable inserts a newline, which does nothing
+  // here but push the hint text around.
+  zone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') e.preventDefault();
   });
 }
 

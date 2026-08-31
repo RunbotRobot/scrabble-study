@@ -249,27 +249,53 @@ button.secondary {
 }
 
 .wd-image-copy-btn,
+.wd-image-paste-btn,
 .wd-image-choose-btn {
   font-size: 0.8rem;
   padding: 0.4rem 0.6rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* Genuinely editable, not just focusable. A phone only offers its
+   long-press "Paste" menu over an editable target, so this being a
+   plain tabindex div was the whole reason there was nothing to tap:
+   Ctrl+V on a desktop reaches whatever has focus, but a touch keyboard
+   has no Ctrl+V to offer. `user-select: text` keeps iOS willing to
+   raise that menu, and the min-height keeps an empty box big enough to
+   press accurately. */
 .wd-image-paste-zone {
   border: 1px dashed var(--tile-border);
   border-radius: 6px;
   padding: 0.6rem;
+  min-height: 1.2rem;
   text-align: center;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.75rem;
   color: var(--muted);
-  cursor: pointer;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The hint lives in an attribute rather than as text content, so that
+   a paste landing in the box is unambiguously the pasted thing and can
+   be read back and cleared without also eating the hint. */
+.wd-image-paste-zone:empty::before {
+  content: attr(data-placeholder);
 }
 
 .wd-image-paste-zone:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   color: var(--ink);
+}
+
+/* A picture pasted into the box shows for the instant before the
+   upload handler reads it back out — unstyled it would render at full
+   resolution and shove the layout around. */
+.wd-image-paste-zone img {
+  max-width: 100%;
+  max-height: 4rem;
 }
 
 .wd-image-upload-status {

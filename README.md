@@ -225,9 +225,24 @@ end, one way or another —
 So image generation here is a manual step instead: for a root with no
 picture yet, its slot shows a **Copy Gemini prompt** button — copies a
 ready-made prompt (word + definition, worded to read as a plain literal
-illustration) to your clipboard — plus a place to paste or choose the
-picture you get back from generating it yourself, in Gemini's own app
-or anything else. That upload goes to the worker's `PUT /image/:word`
+illustration) to your clipboard — plus three ways to get the picture
+back in once you've generated it yourself, in Gemini's own app or
+anything else:
+
+- **Paste image**, which reads the clipboard directly
+  (`navigator.clipboard.read()`). This is the one that matters on a
+  phone, where copying the picture out of Gemini and tapping this
+  button never involves the camera roll. The browser may ask
+  permission, or interpose its own paste confirmation, the first time.
+- **Long-press the box and pick Paste.** The box is `contenteditable`
+  for exactly this reason: a phone offers its paste menu over editable
+  targets only, so while this was a focusable-but-not-editable `div`
+  there was simply no Paste to tap, and the only route left was saving
+  to storage and using "Choose a file". Desktop Ctrl+V lands here too.
+  A paste that arrives as markup rather than on the event — Safari
+  likes to insert an `<img>` and leave `clipboardData` empty — is read
+  back out of the box and uploaded the same way.
+- **Choose a file**, for a picture that's already saved somewhere. That upload goes to the worker's `PUT /image/:word`
 (raw image bytes, `Content-Type: image/*`) and is stored in Cloudflare
 R2, shared globally rather than per-device — every other device, and
 every other word that happens to share a root, benefits from that one

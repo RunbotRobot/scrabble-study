@@ -280,6 +280,17 @@ bump, not a per-image version.
 Roots with no definition on file get no image slot at all; there's
 nothing meaningful to illustrate.
 
+However carefully the prompt asks for a plain illustration, a generator
+will sometimes hand back a labelled diagram, and in whatever aspect
+ratio it likes. The slot shows a picture whole, at its own proportions
+(capped in height), rather than cropping it to a square — that crop
+used to be silent and cost exactly the edges a diagram puts its labels
+in. Since a slot is only 110-160px wide either way, tapping a picture
+opens it full-screen: fitted to the screen at first, then at its real
+size (scrollable) on a second tap, which on a phone is the only way a
+diagram's labels are actually legible. Tap the backdrop or press Escape
+to close.
+
 Each slot (`js/images.js`'s `mountImageSlots`) checks whether a picture
 already exists (a quick, near-instant `GET`, unlike the old
 auto-generate-on-miss design — no reason for a progress bar anymore)

@@ -209,6 +209,47 @@ function showMissing(wrapEl) {
   wireMissing(wrapEl);
 }
 
+/** Full-screen viewer for one picture. A slot is 110-160px wide, which
+ * suits the plain illustration the prompt asks for but not what an
+ * image model often returns for an abstract definition — a labelled
+ * diagram, where the labels are the whole value and are illegible that
+ * small. One overlay is built once and reused, since only one picture
+ * can be open at a time. */
+let lightboxEl = null;
+
+function closeLightbox() {
+  if (lightboxEl) lightboxEl.hidden = true;
+}
+
+function openLightbox(src) {
+  if (!lightboxEl) {
+    lightboxEl = document.createElement('div');
+    lightboxEl.className = 'wd-lightbox';
+    lightboxEl.hidden = true;
+    lightboxEl.innerHTML = `
+      <img alt="" />
+      <button type="button" class="wd-lightbox-close secondary" aria-label="Close">×</button>
+    `;
+    // Tapping the backdrop (or the close button) leaves; tapping the
+    // picture switches between fit-to-screen and its real size, which
+    // is the only way to actually read a diagram's labels on a phone.
+    lightboxEl.addEventListener('click', closeLightbox);
+    lightboxEl.querySelector('img').addEventListener('click', (e) => {
+      e.stopPropagation();
+      lightboxEl.classList.toggle('wd-lightbox-actual');
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeLightbox();
+    });
+    document.body.appendChild(lightboxEl);
+  }
+  lightboxEl.querySelector('img').src = src;
+  // Always open fitted, whatever the last picture was left as.
+  lightboxEl.classList.remove('wd-lightbox-actual');
+  lightboxEl.scrollTo(0, 0);
+  lightboxEl.hidden = false;
+}
+
 function showImage(wrapEl, src) {
   wrapEl.classList.remove('wd-image-missing');
   wrapEl.classList.add('wd-image-loaded');
@@ -216,6 +257,7 @@ function showImage(wrapEl, src) {
     <img class="wd-image" src="${src}" alt="" />
     <button type="button" class="wd-image-replace-btn secondary">Replace image</button>
   `;
+  wrapEl.querySelector('.wd-image').addEventListener('click', () => openLightbox(src));
   wrapEl.querySelector('.wd-image-replace-btn').addEventListener('click', () => showMissing(wrapEl));
 }
 

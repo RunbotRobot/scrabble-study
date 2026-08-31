@@ -218,13 +218,78 @@ button.secondary {
   animation: blur-shimmer 1.8s ease-in-out infinite;
 }
 
+/* An image generator returns whatever shape it likes — the ERGASTIC
+   diagram that prompted this came back 1024x559 — and this used to
+   force every one of them into a square with `object-fit: cover`,
+   which silently sliced off the left and right of anything wide. On a
+   labelled diagram that takes the labels with it, and the crop is
+   invisible: the picture looks intact, just missing its edges. Show
+   the whole thing at its own proportions instead, with a height cap so
+   a tall one can't run away with the card (the cap letterboxes rather
+   than crops, hence `contain`). */
 .wd-image {
   display: block;
   width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
+  height: auto;
+  max-height: 240px;
+  object-fit: contain;
   border-radius: 8px;
   border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+
+/* A slot is only 110-160px wide, which is plenty for a plain
+   illustration and hopeless for a diagram whose labels are the useful
+   part — so the picture opens full-screen on a tap. Above
+   .lookup-overlay's z-index, so it works from the lookup panel too. */
+.wd-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(43, 38, 32, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 20;
+  overflow: auto;
+  cursor: zoom-out;
+}
+
+.wd-lightbox[hidden] { display: none; }
+
+.wd-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: zoom-in;
+}
+
+/* Fitting a wide diagram to a portrait phone still leaves its labels
+   around 3px tall, so the picture also opens at its real size and
+   scrolls. Centring is dropped in that mode deliberately: a flex item
+   larger than a centred container overflows past the scroll origin,
+   and the top-left of it becomes unreachable. */
+.wd-lightbox-actual {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.wd-lightbox-actual img {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  cursor: zoom-out;
+}
+
+.wd-lightbox-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.25rem 0.6rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .wd-image-replace-btn {

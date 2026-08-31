@@ -157,16 +157,31 @@ function renderWordDefCard(card, revealed) {
  * forms — not a definition — so its background gets its own color,
  * visible even before "Show answer" (not just once revealed), so the
  * card reads as "an endings card" at a glance instead of looking like a
- * word2def card until you flip it. */
+ * word2def card until you flip it.
+ *
+ * The illustration sits under the word and shows from the start, rather
+ * than waiting for "Show answer" the way word2def's does. The reason
+ * word2def withholds it is that there the picture *is* the answer in
+ * visual form; here the answer is a list of endings, which a picture of
+ * the root's meaning gives away nothing about. The word it depicts is
+ * already printed right above it, so there is nothing left to spoil —
+ * and having it up while you're trying to recall the endings is the
+ * whole point. A root with no definition on file has nothing to
+ * illustrate and gets no slot, exactly as elsewhere. */
 function renderEndingsCard(card, revealed) {
   const answerContent = revealed
     ? `<div class="wd-content wd-definition answer-highlight-endings">${card.answer}</div>`
     : `<div class="answer-highlight-endings">${blurBlock('definition')}</div>`;
+  // Keyed on imageSubjectFor's resolved root, not the prompt, so this
+  // shares one uploaded picture with the same root's other cards.
+  const imageSubject = imageSubjectFor(card.prompt);
+  const imageContent = imageSubject ? imageSlotHtml(imageSubject.root, imageSubject.definition) : '';
   return `
     <div class="word-def-row">
       <div class="wd-slot">
         <div class="wd-label">Word</div>
         <div class="wd-content">${card.prompt}</div>
+        ${imageContent}
       </div>
       <div class="wd-slot">
         <div class="wd-label">Endings</div>

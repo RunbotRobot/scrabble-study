@@ -196,8 +196,19 @@ picture instead of generating its own.
 ## Root word images
 
 Each root with a definition gets a small illustration slot — shown on
-word2def/def2word cards (see "Card presentation" above), on jumble
-cards (see above), and in the lookup panel. Nothing in this app calls
+word2def/def2word cards and endings cards (see "Card presentation"
+above), on jumble cards (see above), and in the lookup panel.
+
+When the picture appears differs by card, and follows one rule: it
+shows as soon as it can't give away what's being asked. On a def2word
+card the definition is the prompt, so it's up from the start; on a
+word2def card the definition *is* the answer and a picture of it would
+spoil the recall, so it waits for "Show answer". An endings card asks
+for conjugations, plurals and RE-/UN- forms — nothing a picture of the
+root's meaning hints at, and the word itself is printed right above it
+— so there it's up from the start too, where it can actually help you
+place the word while you dig for its endings. It sits under the word,
+in the left column, rather than in the answer column. Nothing in this app calls
 an image-generation API itself: every free option tried was a dead
 end, one way or another —
 

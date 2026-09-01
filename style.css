@@ -175,6 +175,37 @@ button.secondary {
   gap: 0.5rem;
 }
 
+/* An endings answer is a list of long words — a 7-letter root plus
+   -ING, plus a comma, is 12 characters — while the word beside it is 8
+   at most (MAX_DEFINITION_ROOT_LENGTH). Splitting the row evenly
+   therefore starved the side that needed the room: at 360px the answer
+   column had 90px of usable width and OUTYIELD's OUTYIELDED, and
+   OUTYIELDING, (90px and 96px) had nowhere to go but a mid-word break.
+   Give the answer the larger share instead; 8 characters and a picture
+   still sit comfortably in what's left. */
+.endings-row .wd-slot:first-child {
+  flex: 0 1 38%;
+}
+
+.endings-row .wd-slot:last-child {
+  flex: 1 1 62%;
+}
+
+/* Below this there is no split that works: at 320px even 62% leaves
+   92px for a 96px word. Stack instead, which hands the answer the
+   card's full width and stops the fit depending on how the row is
+   divided at all. */
+@media (max-width: 359px) {
+  .endings-row {
+    flex-direction: column;
+  }
+
+  .endings-row .wd-slot:first-child,
+  .endings-row .wd-slot:last-child {
+    flex: 1 1 auto;
+  }
+}
+
 .wd-label {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 0.7rem;

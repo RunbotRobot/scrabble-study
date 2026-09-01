@@ -11,7 +11,7 @@ import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
-import { imageSlotHtml, mountImageSlots } from './images.js';
+import { imageSlotHtml, mountImageSlots, preloadImages } from './images.js';
 import { imageSubjectFor } from './dictionary.js';
 import { fetchVersion } from './version.js';
 import { initPersistence } from './idb-store.js';
@@ -63,7 +63,7 @@ function renderJumbleTiles(card) {
  * pictures, not just one for the card's own answer. Solutions that are
  * inflected forms of the same root (rather than roots of their own)
  * collapse onto that root's single shared image. */
-function renderJumbleImages(card) {
+function jumbleImageSubjects(card) {
   const seenRoots = new Set();
   const subjects = [];
   for (const word of getDeckAnagramSolutions(card.prompt)) {
@@ -72,9 +72,26 @@ function renderJumbleImages(card) {
     seenRoots.add(subject.root);
     subjects.push(subject);
   }
+  return subjects;
+}
+
+function renderJumbleImages(card) {
+  const subjects = jumbleImageSubjects(card);
   if (subjects.length === 0) return '';
   const imgs = subjects.map(({ root, definition }) => imageSlotHtml(root, definition)).join('');
   return `<div class="jumble-images">${imgs}</div>`;
+}
+
+/** Every illustration a card will end up showing, whether or not it's
+ * showing one yet. Derived here rather than inside each renderer so
+ * that what gets fetched ahead of time can't drift from what actually
+ * appears on reveal. */
+function imageSubjectsFor(card) {
+  if (card.type === 'jumble') return jumbleImageSubjects(card);
+  // word2def and endings are keyed on the prompt, def2word on the answer;
+  // either way it's the card's root word.
+  const subject = imageSubjectFor(card.type === 'def2word' ? card.answer : card.prompt);
+  return subject ? [subject] : [];
 }
 
 /** The small label above a card, if any — only needed for card types that
@@ -177,7 +194,7 @@ function renderEndingsCard(card, revealed) {
   const imageSubject = imageSubjectFor(card.prompt);
   const imageContent = imageSubject ? imageSlotHtml(imageSubject.root, imageSubject.definition) : '';
   return `
-    <div class="word-def-row">
+    <div class="word-def-row endings-row">
       <div class="wd-slot">
         <div class="wd-label">Word</div>
         <div class="wd-content">${card.prompt}</div>
@@ -219,6 +236,14 @@ function loadNextCard() {
     <button id="show-answer-btn" class="secondary">Show answer</button>
   `;
   mountImageSlots(studyCard);
+  // Fetch the card's illustration(s) now, during the seconds spent
+  // recalling the answer, so that "Show answer" reveals a picture
+  // that's already in hand. A card that shows its picture up front
+  // (def2word, endings) is already loading it and this is a no-op for
+  // it; the ones that matter are word2def and jumble, which withhold
+  // theirs until the reveal and would otherwise start from nothing at
+  // the least convenient moment.
+  preloadImages(imageSubjectsFor(card).map((s) => s.root));
   document.getElementById('show-answer-btn').addEventListener('click', showAnswer);
 }
 

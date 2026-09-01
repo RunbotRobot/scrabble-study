@@ -285,7 +285,17 @@ will sometimes hand back a labelled diagram, and in whatever aspect
 ratio it likes. The slot shows a picture whole, at its own proportions
 (capped in height), rather than cropping it to a square — that crop
 used to be silent and cost exactly the edges a diagram puts its labels
-in. Since a slot is only 110-160px wide either way, tapping a picture
+in.
+
+A card that withholds its picture until "Show answer" (word2def and
+jumble — see "Card presentation") starts fetching it the moment the
+card is dealt, during the seconds spent recalling the answer, so the
+reveal shows a picture already in hand rather than beginning a download
+at the least convenient moment. A preload that has already settled also
+answers the "has this word got a picture at all?" question that the
+slot would otherwise send its own probe request to ask.
+
+Since a slot is only 110-160px wide either way, tapping a picture
 opens it full-screen: fitted to the screen at first, then at its real
 size (scrollable) on a second tap, which on a phone is the only way a
 diagram's labels are actually legible. Tap the backdrop or press Escape

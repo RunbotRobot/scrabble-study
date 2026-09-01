@@ -23,6 +23,34 @@ export function imageUrlFor(word) {
   return `${WORKER_URL}/image/${encodeURIComponent(word)}?v=${IMAGE_CACHE_BUST}`;
 }
 
+/** Pictures fetched before anything asks to display them, keyed by
+ * word. Holding the Image objects matters as much as firing the
+ * requests: a browser keeps a decoded copy alive while one is
+ * referenced, so revealing an answer paints from memory instead of
+ * re-reading and re-decoding the file — and since the endpoint answers
+ * `no-cache` (see the worker), an unreferenced picture would still owe
+ * a revalidation round-trip at the moment it's needed, which is the
+ * moment this exists to protect. Bounded, because a long session
+ * touches every root in the deck and a decoded bitmap is far larger
+ * than the file it came from. */
+const PRELOAD_LIMIT = 24;
+const preloaded = new Map();
+
+/** Starts loading these roots' pictures now, so that a card whose
+ * illustration only appears on "Show answer" (see app.js) has it ready
+ * the instant it's revealed rather than beginning the download then.
+ * Words with no picture uploaded yet simply 404 and cost nothing. */
+export function preloadImages(words) {
+  for (const word of words) {
+    if (preloaded.has(word)) continue;
+    const img = new Image();
+    img.src = imageUrlFor(word);
+    preloaded.set(word, img);
+    // Map iterates in insertion order, so the first key is the oldest.
+    if (preloaded.size > PRELOAD_LIMIT) preloaded.delete(preloaded.keys().next().value);
+  }
+}
+
 /** Text to copy into Gemini (or any other image generator) — this app
  * never calls an image-generation API itself (see README's "Root word
  * images": every free option tried either had no usable free tier or,
@@ -269,6 +297,18 @@ function showImage(wrapEl, src) {
 export function mountImageSlots(root) {
   for (const wrapEl of root.querySelectorAll('[data-image-word]')) {
     const word = wrapEl.dataset.imageWord;
+    // A preload that has already settled has answered the very
+    // question the probe below exists to ask, so don't ask it again:
+    // whether the picture loaded or 404'd is readable straight off it.
+    // Saves a request, and more to the point saves the round-trip's
+    // worth of blank slot between revealing an answer and seeing the
+    // picture, which is the whole reason for preloading.
+    const ready = preloaded.get(word);
+    if (ready && ready.complete) {
+      if (ready.naturalWidth > 0) showImage(wrapEl, ready.src);
+      else showMissing(wrapEl);
+      continue;
+    }
     const probe = new Image();
     probe.onload = () => showImage(wrapEl, imageUrlFor(word));
     probe.onerror = () => showMissing(wrapEl);

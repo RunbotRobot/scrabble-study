@@ -26,6 +26,7 @@ const SHELL_ASSETS = [
   './js/cards.js',
   './js/dictionary.js',
   './js/idb-store.js',
+  './js/image-editor.js',
   './js/images.js',
   './js/jumble.js',
   './js/lookup-ui.js',

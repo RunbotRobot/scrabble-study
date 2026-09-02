@@ -295,6 +295,34 @@ at the least convenient moment. A preload that has already settled also
 answers the "has this word got a picture at all?" question that the
 slot would otherwise send its own probe request to ask.
 
+### Painting the word out of a picture
+
+An image generator will print the word across the picture however
+firmly the prompt asks it not to — 12 of the first 47 uploads here came
+back with it — and on a def2word card, where the word is what you're
+being asked for, that is the answer in plain sight. Nothing can catch
+this automatically: the browser's own `TextDetector` has been removed
+from Chrome, and a WASM OCR build is both a multi-megabyte dependency
+that would end the app's offline-first story and no use at all on the
+stylised lettering these actually produce. So a picture that's showing
+offers an **Edit** button, which opens three tools — an eraser, an
+eyedropper, and a flood fill — over a full-size canvas
+(`js/image-editor.js`). The starting colour is sampled from a corner
+pixel, which for these is almost always the flat background the title
+sits on, so erasing usually works without touching the eyedropper at
+all. Saving re-uploads the edited picture over the old one.
+
+The eraser's interaction is the point of the whole thing. A fingertip
+covers what it is erasing, and simply offsetting the brush from the
+finger only moves the problem — you then have to guess where the brush
+is before the first stroke lands. So placement and movement are
+separated: tapping the picture puts the brush exactly where you tapped,
+with no offset to judge, and a handle then appears a thumb's width
+away. Dragging the handle moves the brush with it, so for the whole
+stroke the brush is somewhere you can see and the finger is somewhere
+you don't care about. Tapping off the picture, tapping the Erase button
+again, or choosing another tool all put it away.
+
 Since a slot is only 110-160px wide either way, tapping a picture
 opens it full-screen: fitted to the screen at first, then at its real
 size (scrollable) on a second tap, which on a phone is the only way a

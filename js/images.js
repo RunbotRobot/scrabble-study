@@ -1,4 +1,5 @@
 import { WORKER_URL } from './sync.js';
+import { openImageEditor } from './image-editor.js';
 
 /** One-time cache-buster, and hopefully the last one. The image
  * endpoint used to answer with `max-age=31536000, immutable`, which was
@@ -282,14 +283,29 @@ function openLightbox(src) {
   lightboxEl.hidden = false;
 }
 
+/** Opens the paint tools on the picture that's showing, and stores
+ * whatever comes back. This is how the word gets painted out of a
+ * picture that arrived with it printed across the top — the generator
+ * does that no matter how the prompt is worded, and on a def2word card
+ * it reads as the answer. */
+async function editImage(wrapEl, src) {
+  const word = wrapEl.dataset.imageWord;
+  const edited = await openImageEditor(src, { title: word });
+  if (edited) await uploadImage(word, edited, wrapEl);
+}
+
 function showImage(wrapEl, src) {
   wrapEl.classList.remove('wd-image-missing');
   wrapEl.classList.add('wd-image-loaded');
   wrapEl.innerHTML = `
     <img class="wd-image" src="${src}" alt="" />
-    <button type="button" class="wd-image-replace-btn secondary">Replace image</button>
+    <div class="wd-image-buttons">
+      <button type="button" class="wd-image-edit-btn secondary">Edit</button>
+      <button type="button" class="wd-image-replace-btn secondary">Replace</button>
+    </div>
   `;
   wrapEl.querySelector('.wd-image').addEventListener('click', () => openLightbox(src));
+  wrapEl.querySelector('.wd-image-edit-btn').addEventListener('click', () => editImage(wrapEl, src));
   wrapEl.querySelector('.wd-image-replace-btn').addEventListener('click', () => showMissing(wrapEl));
 }
 

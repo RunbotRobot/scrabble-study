@@ -170,6 +170,10 @@ async function uploadImage(word, file, wrapEl) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || `upload failed (HTTP ${res.status})`);
     }
+    // This word's preload entry, if any, is now a stale "nothing here"
+    // — drop it so preloading picks the new picture up rather than
+    // skipping the word as already known.
+    preloaded.delete(word);
     showImage(wrapEl, URL.createObjectURL(file));
   } catch (err) {
     console.error('Image upload failed:', err);
@@ -297,16 +301,22 @@ function showImage(wrapEl, src) {
 export function mountImageSlots(root) {
   for (const wrapEl of root.querySelectorAll('[data-image-word]')) {
     const word = wrapEl.dataset.imageWord;
-    // A preload that has already settled has answered the very
-    // question the probe below exists to ask, so don't ask it again:
-    // whether the picture loaded or 404'd is readable straight off it.
-    // Saves a request, and more to the point saves the round-trip's
-    // worth of blank slot between revealing an answer and seeing the
-    // picture, which is the whole reason for preloading.
+    // A preload that has already loaded has answered the very question
+    // the probe below exists to ask, so don't ask it again: saves a
+    // request, and saves the round-trip's worth of blank slot between
+    // revealing an answer and seeing the picture, which is the whole
+    // reason for preloading.
+    //
+    // Only a *successful* one, though. A preload that 404'd says
+    // nothing lasting -- "no picture yet" is a fact with a short shelf
+    // life, since the next thing you do about it is upload one. Trust
+    // that and a word preloaded before its picture arrived is stuck
+    // looking empty for the rest of the session, on every card that
+    // shows it, with the picture sitting on the server the whole time.
+    // Fall through and re-probe instead; a 404 costs almost nothing.
     const ready = preloaded.get(word);
-    if (ready && ready.complete) {
-      if (ready.naturalWidth > 0) showImage(wrapEl, ready.src);
-      else showMissing(wrapEl);
+    if (ready && ready.complete && ready.naturalWidth > 0) {
+      showImage(wrapEl, ready.src);
       continue;
     }
     const probe = new Image();

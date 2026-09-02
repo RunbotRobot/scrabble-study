@@ -225,6 +225,53 @@ button.secondary {
    words in the Word column, so they get a smaller size to keep long
    entries — e.g. "protoplasmic" showing up inside a definition — from
    overflowing their column on a phone screen. */
+/* The word beside a definition is at most 8 characters
+   (MAX_DEFINITION_ROOT_LENGTH in cards.js), but it is still a word:
+   splitting HOGMANAY across two lines to honour an even column split
+   makes it unreadable, and the split is what should give way. An even
+   50/50 left it 93px for a 92px word at 320px — fitting by one pixel,
+   which is no fit at all: a device that resolves the serif stack to a
+   wider face than expected, or a reader who has scaled their text up,
+   loses it, and word-break then chops the word rather than the layout.
+
+   min-content sizes the column to whatever the word genuinely needs in
+   the font and size that device actually ended up using, which is the
+   one thing no fixed percentage or font-size can know in advance. It
+   only means that once the word is unbreakable, hence resetting
+   word-break here: while a word may break anywhere, its min-content
+   width is one character.
+
+   Scoped away from .endings-row, whose first column holds the picture
+   — an image's min-content width is its intrinsic width, which would
+   size the column to the picture's full resolution. */
+.word-def-row:not(.endings-row) > .wd-slot:first-child {
+  min-width: min-content;
+}
+
+/* Sizing the word to its content has to come out of the definition's
+   share, and past a point there isn't a share left worth having: with
+   text scaled up, the definition was being squeezed to 33px, about one
+   short word per line. Rather than pick a viewport width to stack at —
+   which would catch a narrow screen but not a reader who has scaled
+   their text, and it is the ratio of text size to width that decides
+   this, not width alone — give the definition a floor and let it wrap
+   onto its own full-width line whenever the two can no longer share
+   one. Not applied to .endings-row, whose 38/62 basis plus the row gap
+   exceeds 100% by design and would wrap on sight. */
+.word-def-row:not(.endings-row) {
+  flex-wrap: wrap;
+}
+
+.word-def-row:not(.endings-row) > .wd-slot:last-child {
+  flex: 1 1 8em;
+  min-width: 8em;
+}
+
+.word-def-row:not(.endings-row) > .wd-slot:first-child .wd-content {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .wd-definition {
   font-size: 0.85rem;
   font-weight: 500;

@@ -158,9 +158,32 @@ text, it gets its own **Endings** card, along with the root's
 conjugations/plurals and its `RE-`/`UN-`-prefixed form(s) (`READD`,
 `UNPALATABLE`, etc.), whichever of those exist and are valid Scrabble
 words. Forms are ordered rather than alphabetized: verb conjugations
-read `-ED, -ING, -S` (e.g. `PREVISED, PREVISING, PREVISES`), and where a
-root has both a regular and an irregular plural, the regular one comes
-first (e.g. `MACULAS, MACULAE`). Endings cards share
+read past, past participle, `-ING`, `-S` (e.g. `PREVISED, PREVISING,
+PREVISES`), and where a root has both a regular and an irregular
+plural, the regular one comes first (e.g. `MACULAS, MACULAE`).
+
+The past tense is not found by looking for `-ED`, which would assume
+every verb has a regular one. `MISDEAL`'s past is `MISDEALT`, matching
+none of the endings, and it used to fall to the bottom of the list.
+Nor is it found by recognising the irregular spellings — `-T` here, a
+vowel change in `BEGAN`, a different word entirely in `WENT`. It works
+by elimination: a form that matches none of the regular endings is the
+irregular one, and on a verb the irregular slots are precisely the past
+and the past participle, so it belongs with the conjugations whatever
+it looks like, and whether or not a regular `-ED` is also present
+(`SHOW` has both, as `SHOWED, SHOWN`).
+
+That test needs the part of speech to mean anything, because the same
+"matches nothing" condition picks out an irregular plural on a noun
+(`OXEN`) and a comparative on an adjective (`APTER`), which belong
+nowhere near the front — and across the dictionary those outnumber the
+verb cases roughly six to one. Where a verb has several irregular
+forms, which is the past and which the participle isn't recoverable
+from the letters, so they keep their source order among themselves
+(`GO` gives `GONE, GWINE, WENT`); all of them still precede the
+`-ING`.
+
+Endings cards share
 the word2def two-column layout (root word on the left) but carry an
 "Endings" label and a background color distinct from a definition's,
 visible even before "Show answer" so it reads as an endings card at a

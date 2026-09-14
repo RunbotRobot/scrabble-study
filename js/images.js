@@ -60,7 +60,17 @@ export function preloadImages(words) {
  * result back in. */
 export function geminiPromptFor(word, definition) {
   const gloss = definition || 'no definition on file';
-  return `A simple, clear illustration representing the Scrabble word "${word}": ${gloss}. Plain background, no text, no watermark.`;
+  // "Photograph of" rather than "photorealistic image of": naming the
+  // medium steers a generator harder than describing the style does.
+  // The no-lettering clause enumerates the forms it actually turns up
+  // in — a title across the top, a caption, a label on a part of the
+  // subject — because a bare "no text" has not been enough (see the
+  // Edit tools in js/image-editor.js, which exist for when it isn't).
+  // The definition stays behind a colon rather than becoming the object
+  // of "a photograph of". Plenty of them are verb glosses — "to stot
+  // (to bound with a stiff-legged gait)" — and "a photograph of to
+  // stot" is not a sentence a generator should have to interpret.
+  return `A photograph illustrating the Scrabble word "${word}": ${gloss}. Photorealistic, natural lighting, sharp focus, plain uncluttered background. The word itself must not appear anywhere in the picture: no text, lettering, titles, captions, labels or watermarks.`;
 }
 
 function escapeAttr(s) {

@@ -258,10 +258,19 @@ end, one way or another —
 
 So image generation here is a manual step instead: for a root with no
 picture yet, its slot shows a **Copy Gemini prompt** button — copies a
-ready-made prompt (word + definition, worded to read as a plain literal
-illustration) to your clipboard — plus three ways to get the picture
+ready-made prompt to your clipboard — plus three ways to get the picture
 back in once you've generated it yourself, in Gemini's own app or
-anything else:
+anything else.
+
+The prompt asks for a photograph rather than a drawing. It names the
+medium first ("a photograph illustrating..."), which steers a generator
+harder than describing a style does, and keeps the definition behind a
+colon rather than making it the object of "a photograph of" — plenty of
+them are verb glosses, and "a photograph of to stot" is not a sentence
+worth asking anything to interpret. The instruction against text
+enumerates the forms it actually turns up in (titles, captions, labels)
+rather than saying "no text", which has not been enough on its own —
+see the Edit tools below, which exist for when it isn't.
 
 - **Paste image**, which reads the clipboard directly
   (`navigator.clipboard.read()`). This is the one that matters on a

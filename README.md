@@ -173,6 +173,14 @@ and the past participle, so it belongs with the conjugations whatever
 it looks like, and whether or not a regular `-ED` is also present
 (`SHOW` has both, as `SHOWED, SHOWN`).
 
+A root ending in `-O` that has both plural spellings reads `-OS` before
+`-OES` (`ZEROS, ZEROES`). Both end in `S`, so the ranking above can't
+separate them and they used to come out in whatever order the source
+data happened to list them — which isn't consistent between entries:
+`ZERO` and `CARGO` list the `-OES` form first, `SOLO` the `-OS` one.
+Verbs ending in `-O` get the same treatment, since the third person has
+the same pair (`ECHOS, ECHOES`).
+
 That test needs the part of speech to mean anything, because the same
 "matches nothing" condition picks out an irregular plural on a noun
 (`OXEN`) and a comparative on an adjective (`APTER`), which belong

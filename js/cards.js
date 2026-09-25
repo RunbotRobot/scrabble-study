@@ -16,6 +16,20 @@ function isIrregularForm(form) {
   return !form.endsWith('ED') && !form.endsWith('ING') && !form.endsWith('S');
 }
 
+/** Separates the two plural spellings a root ending in -O can take, so
+ * that -OS comes before -OES (ZEROS, ZEROES). Both end in S, so the
+ * ranking above cannot tell them apart and they fell out in whatever
+ * order the source data listed them — which is not even consistent
+ * between entries: ZERO and CARGO list the -OES form first, SOLO the
+ * -OS form. Returned as a tiebreaker rather than folded into the main
+ * ranking because it only ever decides between two forms that already
+ * rank the same. Verbs get the same treatment, since -O verbs have the
+ * same pair for the third person (ECHOS, ECHOES). */
+function oPluralRank(form, rootWord) {
+  if (!rootWord.endsWith('O')) return 0;
+  return form === `${rootWord}ES` ? 1 : 0;
+}
+
 /** Sorts inflected forms into a natural reading order — verb
  * conjugations as past, past participle, -ING, then the -S form (e.g.
  * PREVISED, PREVISING, PREVISES), and for plurals, the regular -S/-ES
@@ -84,7 +98,9 @@ export function buildCardSpecs(rootWord) {
     }
   }
   const inflections = [...inflectionSet].sort(
-    (a, b) => inflectionRank(a, irregularVerbForms) - inflectionRank(b, irregularVerbForms)
+    (a, b) =>
+      inflectionRank(a, irregularVerbForms) - inflectionRank(b, irregularVerbForms) ||
+      oPluralRank(a, rootWord) - oPluralRank(b, rootWord)
   );
 
   const derivedForms = [];

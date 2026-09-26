@@ -80,6 +80,17 @@ streak with, is seeded automatically the first time the app has zero
 cards (after giving cloud sync, if configured, a chance to pull down
 existing progress first).
 
+Hitting a milestone interrupts with a modal that has to be dismissed,
+rather than the line of text above the card that it used to use. That
+line stays put until something else replaces it, so the announcement
+was still sitting there several cards later, reading as furniture
+rather than as news. The backdrop deliberately doesn't dismiss the
+modal: it appears the instant a card is graded, which is exactly when a
+thumb is already moving toward where the next card's buttons will be,
+and a stray tap there would close it unread. The button and Escape do.
+Other notices — a mistake pile filling up, a storage error — still use
+the inline line.
+
 ## Review priority
 
 Once a card's graduated out of intro drilling, there's no due/not-due

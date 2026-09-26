@@ -18,6 +18,9 @@ import { initPersistence } from './idb-store.js';
 
 const statsEl = document.getElementById('stats');
 const milestoneMessageEl = document.getElementById('milestone-message');
+const milestoneModalEl = document.getElementById('milestone-modal-root');
+const milestoneModalTextEl = document.getElementById('milestone-modal-text');
+const milestoneModalCloseEl = document.getElementById('milestone-modal-close');
 const studyCard = document.getElementById('study-card');
 const syncPanelEl = document.getElementById('sync-panel');
 const lookupBtnEl = document.getElementById('lookup-btn');
@@ -269,6 +272,37 @@ function showMilestoneMessage(text, isError = false) {
   milestoneMessageEl.classList.toggle('milestone-message-error', isError);
 }
 
+function closeMilestoneModal() {
+  milestoneModalEl.hidden = true;
+}
+
+/** Hitting a streak milestone is the one moment in a session where
+ * something actually happened — a batch of new words just joined the
+ * deck — and it used to be announced in the same line of text that sits
+ * above the card, where it simply stayed put while you carried on
+ * answering. Being still on screen four cards later, it read as part of
+ * the furniture rather than as news, which is the opposite of what an
+ * event worth noticing should do.
+ *
+ * So it interrupts instead, and has to be dismissed. The backdrop
+ * deliberately does not dismiss it: the modal appears the instant a
+ * card is graded, which is exactly when a thumb is already travelling
+ * toward where the next card's buttons will be, and a stray tap there
+ * would close it before it had been read. The button and Escape do. */
+function showMilestoneModal(text) {
+  // Clear the inline line so the same news isn't also sitting behind
+  // the modal, still there once it's dismissed.
+  showMilestoneMessage('');
+  milestoneModalTextEl.textContent = text;
+  milestoneModalEl.hidden = false;
+  milestoneModalCloseEl.focus();
+}
+
+milestoneModalCloseEl.addEventListener('click', closeMilestoneModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !milestoneModalEl.hidden) closeMilestoneModal();
+});
+
 /** Appends the browser's own storage-usage numbers to whatever error
  * message is currently shown, once they're available — the message
  * itself renders immediately (this is async), then gets the concrete
@@ -300,7 +334,7 @@ async function grade(correct) {
     const { streak, milestoneHit } = await recordAnswer(correct);
     if (milestoneHit) {
       const batchResult = await generateIntroBatch(MILESTONE_EVERY);
-      showMilestoneMessage(
+      showMilestoneModal(
         batchResult.ok
           ? `🔥 ${streak} in a row! Added ${batchResult.cardsAdded} new card${batchResult.cardsAdded === 1 ? '' : 's'} across ${batchResult.wordsAdded} word${batchResult.wordsAdded === 1 ? '' : 's'} to learn.`
           : `🔥 ${streak} in a row! Couldn't find any new words to add — you may have studied the whole dictionary.`

@@ -968,3 +968,30 @@ button.grade-incorrect { background: var(--bad); }
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+/* --- Streak milestone modal --------------------------------------------
+   Reuses the lookup overlay's chrome (including its [hidden] rule, which
+   is what stops the overlay's own display:flex from overriding the
+   attribute) but sits centred rather than near the top, since it is an
+   announcement rather than a panel you work in. */
+.milestone-overlay {
+  align-items: center;
+  z-index: 15;
+}
+
+.milestone-dialog {
+  max-width: 340px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+}
+
+.milestone-modal-text {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1.45;
+}

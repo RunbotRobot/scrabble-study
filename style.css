@@ -890,3 +890,81 @@ button.grade-incorrect { background: var(--bad); }
   text-align: center;
   min-height: 1em;
 }
+
+/* --- Definition search (js/lookup-ui.js) -------------------------------- */
+
+/* The word-lookup input uppercases what you type, which suits a single
+   Scrabble word and not a phrase from a definition. */
+#search-input {
+  text-transform: none;
+}
+
+.search-scope {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.search-scope input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.search-hits {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Each hit is a button, but should read as a row of results rather than
+   a stack of controls — so it drops the button chrome and keeps only
+   the press feedback and a full-width left-aligned layout. */
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  font-weight: 400;
+}
+
+.search-hit:active {
+  background: var(--tile);
+}
+
+.search-hit-word {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.search-hit-def {
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.search-badge {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}

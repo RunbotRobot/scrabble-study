@@ -22,6 +22,7 @@ const studyCard = document.getElementById('study-card');
 const syncPanelEl = document.getElementById('sync-panel');
 const lookupBtnEl = document.getElementById('lookup-btn');
 const lookupModalEl = document.getElementById('lookup-modal-root');
+const searchBtnEl = document.getElementById('search-btn');
 const optionsBtnEl = document.getElementById('options-btn');
 const optionsModalEl = document.getElementById('options-modal-root');
 const optionsCloseEl = document.getElementById('options-close');
@@ -39,6 +40,7 @@ optionsModalEl.addEventListener('click', (e) => {
   if (e.target === optionsModalEl) closeOptions();
 });
 lookupBtnEl.addEventListener('click', closeOptions);
+searchBtnEl.addEventListener('click', closeOptions);
 
 function refreshStats() {
   const stats = getStats();
@@ -399,7 +401,7 @@ document.addEventListener('visibilitychange', () => {
   refreshStats();
   loadNextCard();
   initSyncUI(syncPanelEl);
-  initLookupUI(lookupBtnEl, lookupModalEl);
+  initLookupUI(lookupBtnEl, lookupModalEl, searchBtnEl);
   startBackgroundSync();
 
   fetchVersion().then((version) => {

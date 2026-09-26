@@ -13,7 +13,15 @@
  * and callers need a way to find that out — see js/idb-store.js's set().
  */
 
-import { pickRandomWord, resolveRoots, wordExists, wordCount, getRootSenses, getAnagramSolutions } from './dictionary.js';
+import {
+  pickRandomWord,
+  resolveRoots,
+  wordExists,
+  wordCount,
+  getRootSenses,
+  getAnagramSolutions,
+  searchDefinitions,
+} from './dictionary.js';
 import { buildCardSpecs } from './cards.js';
 import { initialState, schedule, DEFAULT_EASE } from './srs.js';
 import { get, set, describeStorageQuota } from './idb-store.js';
@@ -414,6 +422,23 @@ export async function answerCard(id, correct) {
 
   await set(KEY_CARDS, cards);
   return { card, mistakeBatch };
+}
+
+/** Definition search, optionally narrowed to roots already in your deck
+ * — the dictionary has 92697 roots against the few hundred you are
+ * actually studying, so without that the words you know are lost in the
+ * ones you don't. Every result is marked either way, so an unfiltered
+ * search still shows at a glance which are yours. */
+export function searchByDefinition(query, { deckOnly = false, limit = 100 } = {}) {
+  const selected = new Set(getSelected().map((s) => s.root_word));
+  const found = searchDefinitions(query, {
+    limit,
+    accept: deckOnly ? (root) => selected.has(root) : null,
+  });
+  return {
+    ...found,
+    results: found.results.map((r) => ({ ...r, inDeck: selected.has(r.root) })),
+  };
 }
 
 /** All of a jumble's dictionary anagram solutions that also happen to be

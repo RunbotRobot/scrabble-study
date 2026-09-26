@@ -124,6 +124,46 @@ export function imageSubjectFor(word) {
   return { root, definition };
 }
 
+/** Roots whose definition text contains `query`, case-insensitively.
+ * The inverse of looking a word up: you remember roughly what it means
+ * and want the word back.
+ *
+ * A plain scan of every sense, with no index built or held: the whole
+ * dictionary is 93k senses and about 1.4MB of definition text, which
+ * searches in tens of milliseconds — fast enough for a search that runs
+ * on submit rather than per keystroke, and cheaper than carrying a
+ * second copy of that text around in memory for the life of the page.
+ *
+ * `accept` narrows the scan itself rather than filtering afterwards, so
+ * that `total` counts what the caller actually asked for and the limit
+ * is applied to those. Returns { results, total, truncated }, results
+ * alphabetical and capped at `limit`. */
+export function searchDefinitions(query, { limit = 100, accept = null } = {}) {
+  requireLoaded();
+  const needle = (query || '').trim().toLowerCase();
+  // One letter matches most of the dictionary and tells you nothing.
+  if (needle.length < 2) return { results: [], total: 0, truncated: false };
+
+  const matches = [];
+  for (const word of wordList) {
+    const entry = words[word];
+    if (!entry.s) continue;
+    if (accept && !accept(word)) continue;
+    if (!entry.s.some((sense) => sense.d && sense.d.toLowerCase().includes(needle))) continue;
+    matches.push(word);
+  }
+  matches.sort();
+
+  return {
+    total: matches.length,
+    truncated: matches.length > limit,
+    results: matches.slice(0, limit).map((root) => ({
+      root,
+      senses: words[root].s.map((sense) => ({ pos: sense.p, definition: sense.d })),
+    })),
+  };
+}
+
 function buildAnagramIndex() {
   anagramIndex = new Map();
   for (const w of wordList) {

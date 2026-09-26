@@ -224,6 +224,31 @@ that's an inflected form of another solution's root (rare, since the two
 would need identical letters) collapses onto that root's one shared
 picture instead of generating its own.
 
+## Searching definitions
+
+The **🔎 Search definitions** button in Options is the lookup panel run
+backwards: type words you remember from a definition and get the words
+that match. A checkbox narrows it to the words already in your deck,
+which matters because the dictionary holds 92697 roots against the few
+hundred you are actually studying — without it, the words you know are
+lost among the ones you don't. Results are marked "in deck" either way,
+so an unfiltered search still shows at a glance which are yours.
+
+Picking a result switches the panel to word mode for that word, which
+is the view that already answers "so what is this, and am I studying
+it?" — definition, conjugations, picture, your stats on it, or an Add
+button if it isn't yours yet. A Back button returns to the results,
+since scanning a list is the point of searching.
+
+It's a plain scan of every sense rather than an index: 93k senses and
+about 1.4MB of definition text search in tens of milliseconds, which is
+fast enough for a search that runs on submit, and cheaper than keeping
+a second copy of that text in memory for the life of the page. Ticking
+the checkbox re-runs the search rather than filtering what's on screen,
+because narrowing the scan can surface matches the unfiltered first
+hundred cut off. Queries shorter than two characters aren't run — one
+letter matches most of the dictionary and tells you nothing.
+
 ## Root word images
 
 Each root with a definition gets a small illustration slot — shown on

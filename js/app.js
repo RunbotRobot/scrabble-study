@@ -93,9 +93,12 @@ function renderJumbleImages(card) {
  * appears on reveal. */
 function imageSubjectsFor(card) {
   if (card.type === 'jumble') return jumbleImageSubjects(card);
-  // word2def and endings are keyed on the prompt, def2word on the answer;
-  // either way it's the card's root word.
-  const subject = imageSubjectFor(card.type === 'def2word' ? card.answer : card.prompt);
+  // Whichever field holds an actual word: word2def's prompt, def2word's
+  // answer, and for endings the root word — its prompt may carry a part
+  // of speech ("TIDY (adj)") and isn't a word at all.
+  const word =
+    card.type === 'def2word' ? card.answer : card.type === 'endings' ? card.root_word : card.prompt;
+  const subject = imageSubjectFor(word);
   return subject ? [subject] : [];
 }
 
@@ -194,9 +197,11 @@ function renderEndingsCard(card, revealed) {
   const answerContent = revealed
     ? `<div class="wd-content wd-definition answer-highlight-endings">${card.answer}</div>`
     : `<div class="answer-highlight-endings">${blurBlock('definition')}</div>`;
-  // Keyed on imageSubjectFor's resolved root, not the prompt, so this
-  // shares one uploaded picture with the same root's other cards.
-  const imageSubject = imageSubjectFor(card.prompt);
+  // Keyed on the card's root word, not its prompt: once endings are
+  // split by part of speech the prompt can read "TIDY (adj)", which is
+  // not a word to look up — and both of a root's endings cards should
+  // show the one picture it has anyway.
+  const imageSubject = imageSubjectFor(card.root_word);
   const imageContent = imageSubject ? imageSlotHtml(imageSubject.root, imageSubject.definition) : '';
   return `
     <div class="word-def-row endings-row">

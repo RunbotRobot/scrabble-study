@@ -65,9 +65,106 @@ function inflectionRank(form, irregularVerbForms) {
   return 4;
 }
 
+/** Which group each of a root's RE-/UN- forms belongs with, once the
+ * endings are split by part of speech. Such a form is a fact about the
+ * word rather than about any one sense, so it has no group of its own,
+ * and it has to be put somewhere: repeating it on every card teaches it
+ * twice, and dropping it loses a valid word.
+ *
+ * Each form is placed on its own, since RE- and UN- need not agree.
+ * A verb group wins when the prefixed word has a verb sense, because
+ * that is what these prefixes attach to: REDO and UNDO are each listed
+ * as both noun and verb, so merely taking the first part of speech they
+ * share with the root put them on DO (n) — whose sense is the musical
+ * tone, and whose only ending is DOS. Failing that, any part of speech
+ * shared with the root will do, and failing that the first group, so
+ * the word still appears somewhere. */
+function prefixHomes(prefixForms, groups) {
+  const positions = [...groups.keys()];
+  const homes = new Map();
+  for (const form of prefixForms) {
+    const shared = (getRootSenses(form) || []).map((sense) => sense.pos).filter((pos) => groups.has(pos));
+    const home = shared.includes('v') ? 'v' : shared[0] || positions[0];
+    if (!homes.has(home)) homes.set(home, []);
+    homes.get(home).push(form);
+  }
+  return homes;
+}
+
+/** One endings card per part of speech the root is defined under.
+ *
+ * TIDY is an adjective that goes TIDIER, TIDIEST and a verb that goes
+ * TIDIED, TIDYING, TIDIES, and merging those into a single list asked
+ * you to recall two unrelated paradigms at once while implying they
+ * were one. Splitting them also makes the ordering rules mean something
+ * per card: SOLO's noun list runs SOLOS, SOLI and its verb list SOLOED,
+ * SOLOING, SOLOS, SOLOES, where merged they interleaved.
+ *
+ * The part of speech goes into the prompt, which is both what the card
+ * shows and what distinguishes the two cards' identities (a card's id
+ * is type + root + prompt). It's added only when the root actually has
+ * more than one — a lone "TUBER (n)" would be the part-of-speech tag
+ * this app deliberately drops from definitions for adding noise without
+ * information, and it would also change the identity of every endings
+ * card in every existing deck to no purpose. */
+function endingsSpecs(rootWord, senses) {
+  const groups = new Map();
+  for (const s of senses) {
+    if (s.inflections.length === 0 && s.derived.length === 0) continue;
+    if (!groups.has(s.pos)) groups.set(s.pos, []);
+    groups.get(s.pos).push(s);
+  }
+
+  const prefixForms = [`RE${rootWord}`, `UN${rootWord}`].filter((w) => wordExists(w));
+  // With no group to attach them to there is still a card to make: a
+  // root whose only extra fact is that UNFOO exists should say so.
+  if (groups.size === 0) {
+    if (prefixForms.length === 0) return [];
+    return [{ type: 'endings', prompt: rootWord, answer: prefixForms.join(', ') }];
+  }
+  const prefixHomesByPos = prefixHomes(prefixForms, groups);
+  const labelled = groups.size > 1;
+
+  const specs = [];
+  for (const [pos, group] of groups) {
+    const inflectionSet = new Set();
+    // Scoped to this group, so "irregular" is judged against the part of
+    // speech that actually produced the form.
+    const irregularVerbForms = new Set();
+    for (const s of group) {
+      for (const form of s.inflections) {
+        inflectionSet.add(form);
+        if (pos === 'v' && isIrregularForm(form)) irregularVerbForms.add(form);
+      }
+    }
+    const inflections = [...inflectionSet].sort(
+      (a, b) =>
+        inflectionRank(a, irregularVerbForms) - inflectionRank(b, irregularVerbForms) ||
+        oPluralRank(a, rootWord) - oPluralRank(b, rootWord)
+    );
+
+    const derivedForms = [];
+    const seenDerived = new Set();
+    for (const s of group) {
+      for (const d of s.derived) {
+        if (seenDerived.has(d.word)) continue;
+        seenDerived.add(d.word);
+        derivedForms.push(d);
+      }
+    }
+
+    const mine = prefixHomesByPos.get(pos) || [];
+    const answer = [...inflections, ...derivedForms.map((d) => `${d.word} (${d.pos})`), ...mine].join(', ');
+    if (!answer) continue;
+    specs.push({ type: 'endings', prompt: labelled ? `${rootWord} (${pos})` : rootWord, answer });
+  }
+  return specs;
+}
+
 /** Builds the flashcard specs for a root word: a word->definition card,
- * a definition->word card, an endings card (all three only for roots up
- * to MAX_DEFINITION_ROOT_LENGTH letters), and one jumble card per
+ * a definition->word card, an endings card per part of speech the root
+ * is defined under (all only for roots up to
+ * MAX_DEFINITION_ROOT_LENGTH letters), and one jumble card per
  * distinct conjugated/pluralized form plus the root word itself (each up
  * to MAX_JUMBLE_LENGTH letters) listed across all of the root's senses.
  *
@@ -86,34 +183,10 @@ export function buildCardSpecs(rootWord) {
   const definedSenses = senses.filter((s) => s.definition);
   const definitionText = definedSenses.map((s) => s.definition).join(' / ');
 
-  const inflectionSet = new Set();
-  // Tracked while the senses are still to hand, since which sense a
-  // form came from is exactly what the union throws away — and it is
-  // what tells an irregular past (verb) from an irregular plural (noun).
-  const irregularVerbForms = new Set();
-  for (const s of senses) {
-    for (const form of s.inflections) {
-      inflectionSet.add(form);
-      if (s.pos === 'v' && isIrregularForm(form)) irregularVerbForms.add(form);
-    }
-  }
-  const inflections = [...inflectionSet].sort(
-    (a, b) =>
-      inflectionRank(a, irregularVerbForms) - inflectionRank(b, irregularVerbForms) ||
-      oPluralRank(a, rootWord) - oPluralRank(b, rootWord)
-  );
-
-  const derivedForms = [];
-  const seenDerived = new Set();
-  for (const s of senses) {
-    for (const d of s.derived) {
-      if (seenDerived.has(d.word)) continue;
-      seenDerived.add(d.word);
-      derivedForms.push(d);
-    }
-  }
-
-  const prefixForms = [`RE${rootWord}`, `UN${rootWord}`].filter((w) => wordExists(w));
+  // The union across every sense, for jumbles — which quiz the letters
+  // of a form and don't care which part of speech produced it.
+  const allForms = new Set();
+  for (const s of senses) for (const form of s.inflections) allForms.add(form);
 
   const specs = [];
   if (rootWord.length <= MAX_DEFINITION_ROOT_LENGTH) {
@@ -121,16 +194,9 @@ export function buildCardSpecs(rootWord) {
       specs.push({ type: 'word2def', prompt: rootWord, answer: definitionText });
       specs.push({ type: 'def2word', prompt: definitionText, answer: rootWord });
     }
-    if (inflections.length > 0 || derivedForms.length > 0 || prefixForms.length > 0) {
-      const endingsAnswer = [
-        ...inflections,
-        ...derivedForms.map((d) => `${d.word} (${d.pos})`),
-        ...prefixForms,
-      ].join(', ');
-      specs.push({ type: 'endings', prompt: rootWord, answer: endingsAnswer });
-    }
+    specs.push(...endingsSpecs(rootWord, senses));
   }
-  const jumbleForms = new Set(inflections);
+  const jumbleForms = new Set(allForms);
   jumbleForms.add(rootWord);
   for (const form of jumbleForms) {
     if (form.length > MAX_JUMBLE_LENGTH) continue;

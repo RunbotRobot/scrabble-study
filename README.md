@@ -199,6 +199,27 @@ read past, past participle, `-ING`, `-S` (e.g. `PREVISED, PREVISING,
 PREVISES`), and where a root has both a regular and an irregular
 plural, the regular one comes first (e.g. `MACULAS, MACULAE`).
 
+There is one card per part of speech the root is defined under. `TIDY`
+is an adjective that goes `TIDIER, TIDIEST` and a verb that goes
+`TIDIED, TIDYING, TIDIES`, and a single merged list asked you to recall
+two unrelated paradigms at once while implying they were one.
+Separating them also lets the ordering rules mean something per card:
+`SOLO` reads `SOLOS, SOLI` as a noun and `SOLOED, SOLOING, SOLOS,
+SOLOES` as a verb, where merged they interleaved. About 1.5% of roots
+(589) have more than one. The part of speech appears in the prompt only
+when the root actually has more than one — a lone `TUBER (n)` would be
+the part-of-speech tag this app deliberately drops from definitions for
+adding noise without information.
+
+A `RE-`/`UN-` form is a fact about the word rather than about any one
+sense, so it has to be assigned a card. Each is placed on its own, and
+a verb group wins when the prefixed word has a verb sense, since that
+is what these prefixes attach to: `REDO` and `UNDO` are each listed as
+both noun and verb, so merely taking the first part of speech they
+share with the root put them on `DO (n)` — the musical tone, whose only
+ending is `DOS`. Failing a verb, any shared part of speech will do, and
+failing that the first group, so the word always appears somewhere.
+
 The past tense is not found by looking for `-ED`, which would assume
 every verb has a regular one. `MISDEAL`'s past is `MISDEALT`, matching
 none of the endings, and it used to fall to the bottom of the list.

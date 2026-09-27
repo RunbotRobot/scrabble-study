@@ -378,9 +378,13 @@ function pickWeightedByPriority(pool, nowMs) {
  * MISTAKE_BATCH_SIZE distinct cards, all of them go back into intensive
  * intro drilling together (same mechanism as a fresh batch of new words)
  * and the pile resets. Returns the updated card; { cardCount } when the
- * mistake batch just triggered; and whether this answer was the one
- * that emptied the intro queue, i.e. finished drilling a freshly
- * introduced set. */
+ * mistake batch just triggered; whether this answer was the one that
+ * emptied the intro queue, i.e. finished drilling a freshly introduced
+ * set; and `wasReview`, whether the card was part of the main
+ * repertoire when answered rather than being drilled — which is what
+ * decides whether the answer counts toward the streak (see
+ * js/streak.js). A card graduating on this very answer was still an
+ * intro card when it was asked, so it doesn't count. */
 function countIntro(cards) {
   return cards.filter((c) => !c.deleted && c.phase === 'intro').length;
 }
@@ -432,7 +436,7 @@ export async function answerCard(id, correct) {
   // of held cards *back* into intro in this same call — in which case
   // the queue isn't empty at all and the drilling simply continues.
   const introBatchFinished = introBefore > 0 && countIntro(cards) === 0;
-  return { card, mistakeBatch, introBatchFinished };
+  return { card, mistakeBatch, introBatchFinished, wasReview };
 }
 
 /** Definition search, optionally narrowed to roots already in your deck

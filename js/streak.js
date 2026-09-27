@@ -28,9 +28,26 @@ export async function resetStreak() {
   await setStreak(0);
 }
 
-/** Call after every graded answer. Returns the new streak and whether it
- * just crossed a fresh multiple of MILESTONE_EVERY. */
-export async function recordAnswer(correct) {
+/** Call after every graded answer. Returns the streak and whether it
+ * just crossed a fresh multiple of MILESTONE_EVERY.
+ *
+ * `countsTowardStreak` is false for an answer given while drilling a
+ * freshly introduced set, or a mistake pile put back through the same
+ * drilling — neither is the main repertoire, which is the only thing
+ * the streak is meant to measure. Such an answer leaves the count
+ * exactly where it was: it neither builds it up on questions you are
+ * seeing for the third time in five minutes, nor tears down a run
+ * earned in real review because a brand-new word was missed.
+ *
+ * Excluding them is also what stops milestones compounding. They used
+ * to count, so drilling a batch could earn another batch partway
+ * through, and the arithmetic never closed: clearing 50 cards takes
+ * about 100 correct answers at two reps each, while every 50 correct
+ * answers earned roughly 52 more cards. A run of perfect answers grew
+ * the queue faster than it drained it, and only missing often enough to
+ * keep resetting the streak got you out. */
+export async function recordAnswer(correct, countsTowardStreak = true) {
+  if (!countsTowardStreak) return { streak: getStreak(), milestoneHit: false };
   const streak = correct ? getStreak() + 1 : 0;
   await setStreak(streak);
   const milestoneHit = correct && streak % MILESTONE_EVERY === 0;

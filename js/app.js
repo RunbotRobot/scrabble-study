@@ -53,7 +53,7 @@ function refreshStats() {
     ${stats.introducing > 0 ? `<div><dt>Introducing</dt><dd>${stats.introducing.toLocaleString()}</dd></div>` : ''}
     ${stats.recentlyWrong > 0 ? `<div><dt>Recently wrong</dt><dd>${stats.recentlyWrong.toLocaleString()}/50</dd></div>` : ''}
     ${stats.queuedWords > 0 ? `<div><dt>Queued</dt><dd>${stats.queuedWords.toLocaleString()}</dd></div>` : ''}
-    <div><dt>Streak</dt><dd>${getStreak().toLocaleString()}</dd></div>
+    <div><dt>Streak${stats.introducing > 0 ? ' (paused)' : ''}</dt><dd>${getStreak().toLocaleString()}</dd></div>
   `;
 }
 
@@ -329,9 +329,9 @@ async function grade(correct) {
     if (!result) {
       throw new Error(`card ${currentCard.id} no longer exists locally`);
     }
-    const { mistakeBatch, introBatchFinished } = result;
+    const { mistakeBatch, introBatchFinished, wasReview } = result;
 
-    const { streak, milestoneHit } = await recordAnswer(correct);
+    const { streak, milestoneHit } = await recordAnswer(correct, wasReview);
     if (milestoneHit) {
       const batchResult = await generateIntroBatch(MILESTONE_EVERY);
       showMilestoneModal(

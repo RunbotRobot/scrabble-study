@@ -64,6 +64,24 @@ getting one wrong resets it to zero (shown in the stats bar). Every 50 in
 a row — 50, 100, 150, and so on — automatically generates a fresh batch
 of new cards (see above).
 
+Only answers against the main repertoire count. While a freshly
+introduced set is being drilled — or a mistake pile is being put back
+through the same drilling — the streak is frozen, and the stats bar
+says "Streak (paused)". Such an answer neither builds it up on a
+question you're seeing for the third time in five minutes, nor tears
+down a run earned in real review because a brand-new word was missed. A
+card that graduates on the very answer being graded was still being
+drilled when it was asked, so that answer doesn't count either.
+
+This is also what keeps milestones from compounding. They used to
+count, so drilling a batch could earn another batch partway through,
+and the arithmetic never closed: clearing 50 cards takes about 100
+correct answers at two reps each, while every 50 correct answers earned
+roughly 52 more cards. A perfect run grew the queue faster than it
+drained it — only missing often enough to keep resetting the streak got
+you out of drilling at all. A perfect run now finishes a batch in
+almost exactly two answers per card.
+
 A freshly-generated batch is drilled intensively: while any of its cards
 haven't yet been answered correctly twice, they take over the study queue
 entirely (cycled round-robin, ignoring review priority — see below)
@@ -81,13 +99,12 @@ cards (after giving cloud sync, if configured, a chance to pull down
 existing progress first).
 
 Finishing a batch — the moment the last of its cards graduates and the
-intro queue empties — sets the streak back to zero, and says so. The
-streak is meant to measure how you do against the whole repertoire, and
-a run built up cycling a handful of brand-new cards round-robin isn't
-that: carrying it over would mean arriving back at full review already
-most of the way to the next milestone on the strength of the deck's
-easiest questions. A mistake pile going back into drilling in the same
-answer doesn't count as finishing, since the queue isn't empty.
+intro queue empties — sets the streak back to zero, and says so. With
+the count frozen through the drilling, what that clears is the run that
+earned the batch in the first place: full review starts again from
+nothing rather than from wherever it stood when the new words arrived.
+A mistake pile going back into drilling in the same answer doesn't
+count as finishing, since the queue isn't empty.
 
 Hitting a milestone interrupts with a modal that has to be dismissed,
 rather than the line of text above the card that it used to use. That

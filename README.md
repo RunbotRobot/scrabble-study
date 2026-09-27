@@ -80,6 +80,15 @@ streak with, is seeded automatically the first time the app has zero
 cards (after giving cloud sync, if configured, a chance to pull down
 existing progress first).
 
+Finishing a batch — the moment the last of its cards graduates and the
+intro queue empties — sets the streak back to zero, and says so. The
+streak is meant to measure how you do against the whole repertoire, and
+a run built up cycling a handful of brand-new cards round-robin isn't
+that: carrying it over would mean arriving back at full review already
+most of the way to the next milestone on the strength of the deck's
+easiest questions. A mistake pile going back into drilling in the same
+answer doesn't count as finishing, since the queue isn't empty.
+
 Hitting a milestone interrupts with a modal that has to be dismissed,
 rather than the line of text above the card that it used to use. That
 line stays put until something else replaces it, so the announcement

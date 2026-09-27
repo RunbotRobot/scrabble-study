@@ -15,6 +15,19 @@
 
 * { box-sizing: border-box; }
 
+/* Chrome on Android turns an overscroll past the top of the page into a
+   pull-to-refresh, which here means reloading mid-quiz because a swipe
+   carried a little too far. `contain` stops the overscroll propagating
+   to the viewport, which is what triggers that gesture, while leaving
+   ordinary scrolling — and any scrolling inside the page's own panels —
+   exactly as it was. Set on both elements because whichever of the two
+   ends up as the viewport's scrolling box is what the browser reads it
+   from. */
+html,
+body {
+  overscroll-behavior-y: contain;
+}
+
 body {
   margin: 0;
   background: var(--bg);

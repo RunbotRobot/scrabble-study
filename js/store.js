@@ -377,8 +377,14 @@ function pickWeightedByPriority(pool, nowMs) {
  * again until the whole pile is dealt with. Once the pile reaches
  * MISTAKE_BATCH_SIZE distinct cards, all of them go back into intensive
  * intro drilling together (same mechanism as a fresh batch of new words)
- * and the pile resets. Returns the updated card and, when the batch just
- * triggered, { cardCount }. */
+ * and the pile resets. Returns the updated card; { cardCount } when the
+ * mistake batch just triggered; and whether this answer was the one
+ * that emptied the intro queue, i.e. finished drilling a freshly
+ * introduced set. */
+function countIntro(cards) {
+  return cards.filter((c) => !c.deleted && c.phase === 'intro').length;
+}
+
 export async function answerCard(id, correct) {
   const cards = getCards();
   const card = cards.find((c) => c.id === id);
@@ -386,6 +392,7 @@ export async function answerCard(id, correct) {
   const now = new Date();
   const nowIso = now.toISOString();
   const wasReview = card.phase === 'review';
+  const introBefore = countIntro(cards);
 
   const next = schedule(
     { interval_days: card.interval_days, ease: card.ease, reps: card.reps, lapses: card.lapses },
@@ -421,7 +428,11 @@ export async function answerCard(id, correct) {
   }
 
   await set(KEY_CARDS, cards);
-  return { card, mistakeBatch };
+  // Counted after the mistake-pile handling above, which can put a pile
+  // of held cards *back* into intro in this same call — in which case
+  // the queue isn't empty at all and the drilling simply continues.
+  const introBatchFinished = introBefore > 0 && countIntro(cards) === 0;
+  return { card, mistakeBatch, introBatchFinished };
 }
 
 /** Definition search, optionally narrowed to roots already in your deck

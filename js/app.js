@@ -7,7 +7,7 @@ import {
   getDeckAnagramSolutions,
   describeStorageQuota,
 } from './store.js';
-import { getStreak, recordAnswer, MILESTONE_EVERY } from './streak.js';
+import { getStreak, recordAnswer, resetStreak, MILESTONE_EVERY } from './streak.js';
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
@@ -329,7 +329,7 @@ async function grade(correct) {
     if (!result) {
       throw new Error(`card ${currentCard.id} no longer exists locally`);
     }
-    const { mistakeBatch } = result;
+    const { mistakeBatch, introBatchFinished } = result;
 
     const { streak, milestoneHit } = await recordAnswer(correct);
     if (milestoneHit) {
@@ -345,6 +345,18 @@ async function grade(correct) {
           mistakeBatch.cardCount === 1 ? '' : 's'
         } — let's drill ${mistakeBatch.cardCount === 1 ? 'it' : 'them'} intensively.`
       );
+    }
+
+    // Finishing a freshly introduced set hands you back to full review,
+    // and the count starts there rather than carrying over. A run built
+    // up cycling a handful of brand-new cards round-robin isn't a
+    // measure of the whole repertoire, which is what the streak is for.
+    // Done after the milestone above so its message still reports the
+    // streak that earned it. Said out loud, because a streak dropping to
+    // zero with nothing answered wrong otherwise reads as a bug.
+    if (introBatchFinished) {
+      await resetStreak();
+      showMilestoneMessage('✅ New set learned. Streak restarts for full review.');
     }
   } catch (err) {
     console.error('Grading failed:', err);

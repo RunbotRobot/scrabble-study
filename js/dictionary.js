@@ -67,6 +67,21 @@ export function resolveRoots(word) {
   return [...roots];
 }
 
+/** Every part of speech `word` is listed under — from its own senses
+ * and from any crossref. The crossref matters: most of the dictionary's
+ * -LY adverbs (COZILY, NAGGINGLY) have no sense of their own at all,
+ * only a crossref back to the root they derive from, and that crossref
+ * is the only record of what they are. */
+export function partsOfSpeechFor(word) {
+  requireLoaded();
+  const entry = words[word];
+  if (!entry) return [];
+  const positions = new Set();
+  for (const sense of entry.s || []) positions.add(sense.p);
+  for (const crossref of entry.x || []) positions.add(crossref.p);
+  return [...positions];
+}
+
 /** True if `word` appears anywhere in the dictionary (as a root or as an
  * inflected form of one) — i.e. it's a legal Scrabble play. */
 export function wordExists(word) {

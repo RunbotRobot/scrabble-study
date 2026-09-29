@@ -1,4 +1,4 @@
-import { getRootSenses, wordExists } from './dictionary.js';
+import { getRootSenses, wordExists, partsOfSpeechFor } from './dictionary.js';
 import { jumble } from './jumble.js';
 
 /** No jumble cards for inflected forms longer than this many letters. */
@@ -91,6 +91,37 @@ function prefixHomes(prefixForms, groups) {
   return homes;
 }
 
+/** The -ILY adverb of a root ending in -Y, when the dictionary has one:
+ * TIDY gives TIDILY. Worth stating on every such card, because it is a
+ * word you can play and the source data only sometimes bothers to
+ * record it — of the 549 that exist, it lists barely a handful as
+ * derived forms.
+ *
+ * Built by replacing the -Y and then checking the result is really an
+ * adverb, not merely a word. Stripping letters and appending three more
+ * lands on unrelated entries often enough to matter: OY would otherwise
+ * claim OILY, DAY would claim DAILY and HOMY would claim HOMILY, none
+ * of which are adverbs of anything. That test has to look at crossrefs
+ * as well as senses, since most of these adverbs (COZILY, ICKILY) have
+ * no sense of their own — only a crossref recording what they are. */
+function adverbFormFor(rootWord) {
+  if (!rootWord.endsWith('Y')) return null;
+  const candidate = `${rootWord.slice(0, -1)}ILY`;
+  if (!wordExists(candidate)) return null;
+  return partsOfSpeechFor(candidate).includes('adv') ? candidate : null;
+}
+
+/** Which group the -ILY adverb belongs with. An adverb in -ILY is the
+ * adverb of an adjective — tidily is the manner of being tidy, not of
+ * the verb to tidy — so an adjective group takes it whenever the root
+ * has one, which covers 528 of the 549. The rest have no adjective
+ * sense carrying endings at all, and fall to the first group so the
+ * word still gets said somewhere. */
+function adverbHome(groups) {
+  const positions = [...groups.keys()];
+  return positions.includes('adj') ? 'adj' : positions[0];
+}
+
 /** One endings card per part of speech the root is defined under.
  *
  * TIDY is an adjective that goes TIDIER, TIDIEST and a verb that goes
@@ -116,13 +147,25 @@ function endingsSpecs(rootWord, senses) {
   }
 
   const prefixForms = [`RE${rootWord}`, `UN${rootWord}`].filter((w) => wordExists(w));
+  const adverb = adverbFormFor(rootWord);
   // With no group to attach them to there is still a card to make: a
-  // root whose only extra fact is that UNFOO exists should say so.
+  // root whose only extra facts are that UNFOO and FOOILY exist should
+  // say so. CURSORY is the shape of this — no inflections at all, but
+  // CURSORILY is a word.
   if (groups.size === 0) {
-    if (prefixForms.length === 0) return [];
-    return [{ type: 'endings', prompt: rootWord, answer: prefixForms.join(', ') }];
+    const loose = [...(adverb ? [`${adverb} (adv)`] : []), ...prefixForms];
+    if (loose.length === 0) return [];
+    return [{ type: 'endings', prompt: rootWord, answer: loose.join(', ') }];
   }
   const prefixHomesByPos = prefixHomes(prefixForms, groups);
+  // Only add the adverb where the source data hasn't already placed it
+  // somewhere itself — and that check has to span the whole root, not
+  // the group being built. SAVVY lists SAVVILY under its verb sense
+  // while the rule below would file it under the adjective, so a
+  // per-group check saw no clash and put it on both cards.
+  const adverbAlreadyListed =
+    adverb !== null && senses.some((sense) => sense.derived.some((d) => d.word === adverb));
+  const adverbPos = adverb && !adverbAlreadyListed ? adverbHome(groups) : null;
   const labelled = groups.size > 1;
 
   const specs = [];
@@ -152,6 +195,7 @@ function endingsSpecs(rootWord, senses) {
         derivedForms.push(d);
       }
     }
+    if (pos === adverbPos) derivedForms.push({ word: adverb, pos: 'adv' });
 
     const mine = prefixHomesByPos.get(pos) || [];
     const answer = [...inflections, ...derivedForms.map((d) => `${d.word} (${d.pos})`), ...mine].join(', ');

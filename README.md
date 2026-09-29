@@ -211,6 +211,20 @@ when the root actually has more than one — a lone `TUBER (n)` would be
 the part-of-speech tag this app deliberately drops from definitions for
 adding noise without information.
 
+A root ending in `-Y` also gets its `-ILY` adverb, when one exists:
+`TIDY (adj)` carries `TIDILY`. It's a word you can play, and the source
+data only sometimes records it — of the 549 that exist, it lists barely
+a handful. The candidate is built by replacing the `-Y`, then checked
+to be genuinely an adverb rather than merely a word, because stripping
+a letter and appending three lands on unrelated entries often enough to
+matter: `OY` would otherwise claim `OILY`, `DAY` would claim `DAILY`
+and `HOMY` would claim `HOMILY`. That check reads crossrefs as well as
+senses, since most of these adverbs (`COZILY`, `ICKILY`) have no sense
+of their own, only a crossref recording what they are. An `-ILY` adverb
+is the adverb of an adjective, so an adjective card takes it wherever
+the root has one (528 of the 549); the rest fall to the first card so
+the word still gets said.
+
 A `RE-`/`UN-` form is a fact about the word rather than about any one
 sense, so it has to be assigned a card. Each is placed on its own, and
 a verb group wins when the prefixed word has a verb sense, since that

@@ -14,7 +14,12 @@
  */
 
 const SHELL_CACHE = 'scrabble-study-shell-v5';
-const DATA_CACHE = 'scrabble-study-data-v5';
+// Bumped to v6 to retire the dictionary parsed before the multi-derived
+// -form fix (see scripts/build-dictionary.js): data assets are served
+// cache-first, so without a new cache name every existing install would
+// go on using the copy where 277 entries had their inflections stranded
+// inside the definition text.
+const DATA_CACHE = 'scrabble-study-data-v6';
 
 const SHELL_ASSETS = [
   './',

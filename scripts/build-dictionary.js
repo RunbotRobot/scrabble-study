@@ -36,7 +36,15 @@ const OUT = path.join(__dirname, '..', 'data', 'dictionary.json');
 
 const CROSSREF_RE = /^<([a-z]+)=([a-z]+)>$/i;
 const SHORTHAND_RE = /\{([a-z]+)=[a-z]+\}/gi;
-const DERIVED_SUFFIX_RE = /\s*:\s*([A-Z]+)\s*\[([a-z]+)\]$/i;
+// A sense can end in a list of self-explanatory derived words, not just
+// one: "ATONE ... [v ATONED, ATONES, ATONING] : ATONABLE [adj],
+// ATONEABLE [adj], ATONINGLY [adv]". Matching only a single trailing
+// item meant such a line matched nothing here, so nothing was stripped
+// — and SENSE_RE's end anchor then took that final "[adv]" for the
+// sense's own bracket, leaving the real "[v ATONED, ...]" sitting in
+// the middle of what became the definition. 277 entries read that way.
+const DERIVED_SUFFIX_RE = /\s*:\s*((?:[A-Z]+\s*\[[a-z]+\]\s*,?\s*)+)$/;
+const DERIVED_ITEM_RE = /([A-Z]+)\s*\[([a-z]+)\]/g;
 const SENSE_RE = /^(.*?)\[([a-z]+)\s*([^\]]*)\]$/i;
 const YEAR_SUFFIX_RE = /\s\((\d{4})\)$/;
 
@@ -58,16 +66,20 @@ function parseLine(line) {
   const senses = [];
 
   for (const senseText of senseTexts) {
-    // Strip a trailing " : OTHERWORD [pos]" self-explanatory-derivative
-    // pointer *before* matching the sense's own bracket — otherwise its
-    // "[pos]" (with no inflections) is what SENSE_RE's end anchor grabs,
-    // stranding the sense's real "[pos INFL, ...]" bracket in the middle
-    // of the definition text instead of being parsed out.
+    // Strip any trailing " : OTHERWORD [pos], ..." self-explanatory-
+    // derivative pointers *before* matching the sense's own bracket —
+    // otherwise the last of their "[pos]"s (with no inflections) is what
+    // SENSE_RE's end anchor grabs, stranding the sense's real
+    // "[pos INFL, ...]" bracket in the middle of the definition text
+    // instead of being parsed out.
     let text = senseText;
-    let derived = null;
+    let derived = [];
     const derivedMatch = text.match(DERIVED_SUFFIX_RE);
     if (derivedMatch) {
-      derived = { pos: derivedMatch[2].toLowerCase(), word: derivedMatch[1].toUpperCase() };
+      derived = [...derivedMatch[1].matchAll(DERIVED_ITEM_RE)].map((item) => ({
+        pos: item[2].toLowerCase(),
+        word: item[1].toUpperCase(),
+      }));
       text = text.slice(0, derivedMatch.index);
     }
 
@@ -89,7 +101,7 @@ function parseLine(line) {
         pos,
         definition: cleanDefinition(defPart),
         inflections,
-        derived: derived ? [derived] : [],
+        derived,
       });
     }
   }

@@ -379,7 +379,9 @@ fast enough for a search that runs on submit, and cheaper than keeping
 a second copy of that text in memory for the life of the page. Ticking
 the checkbox re-runs the search rather than filtering what's on screen,
 because narrowing the scan can surface matches the unfiltered first
-hundred cut off. Queries shorter than two characters aren't run — one
+hundred cut off — and it re-runs whatever is in the box at that moment,
+not the last search that was submitted, so text you've typed but not
+searched yet is kept and applied rather than wiped. Queries shorter than two characters aren't run — one
 letter matches most of the dictionary and tells you nothing.
 
 ## Root word images

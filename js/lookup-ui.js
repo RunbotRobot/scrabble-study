@@ -139,6 +139,10 @@ export function initLookupUI(buttonEl, modalRootEl, searchButtonEl) {
       modalRootEl.innerHTML = '';
       return;
     }
+    // Anything typed into the word box and not yet submitted would be
+    // replaced by the last submitted word on this redraw (clicking Add
+    // causes one) — the same loss as in the search box. Read it first.
+    const typedWord = modalRootEl.querySelector('#lookup-input')?.value;
     modalRootEl.innerHTML = `
       <div class="lookup-overlay">
         <div class="lookup-dialog">
@@ -150,7 +154,7 @@ export function initLookupUI(buttonEl, modalRootEl, searchButtonEl) {
                      <button type="submit">Search</button>
                    </form>`
                 : `<form id="lookup-form" class="lookup-form">
-                     <input id="lookup-input" type="text" placeholder="a Scrabble word" value="${escapeHtml(word)}" autocapitalize="off" autocorrect="off" spellcheck="false" />
+                     <input id="lookup-input" type="text" placeholder="a Scrabble word" value="${escapeHtml(typedWord ?? word)}" autocapitalize="off" autocorrect="off" spellcheck="false" />
                      <button type="submit">Look up</button>
                    </form>`
             }
@@ -200,8 +204,14 @@ export function initLookupUI(buttonEl, modalRootEl, searchButtonEl) {
         deckOnly = deckOnlyEl.checked;
         // Re-run rather than filter what's on screen: narrowing the
         // scan can surface matches the unfiltered top-100 cut off.
-        if (searchResult) runSearch(query);
-        else render();
+        //
+        // And re-run what is *in the box*, not `query`. `query` is only
+        // updated when Search is pressed, but this redraws the whole
+        // panel from it — so text typed and not yet submitted was thrown
+        // away the moment the box was ticked, and text edited after a
+        // search was replaced by the old search. The box is what the
+        // person is looking at, so it is what the checkbox applies to.
+        runSearch(modalRootEl.querySelector('#search-input').value);
       });
     }
 

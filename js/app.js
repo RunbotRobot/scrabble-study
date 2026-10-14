@@ -5,6 +5,7 @@ import {
   answerCard,
   getStats,
   getDeckAnagramSolutions,
+  definitionHintFor,
   describeStorageQuota,
 } from './store.js';
 import { getStreak, recordAnswer, resetStreak, MILESTONE_EVERY } from './streak.js';
@@ -150,8 +151,14 @@ function renderWordDefCard(card, revealed) {
   const defHighlight = revealed && wordGiven ? ' answer-highlight' : '';
   const wordContent =
     revealed || wordGiven ? `<div class="wd-content${wordHighlight}">${word}</div>` : blurBlock('word');
+  // Only a Definition -> Word card has anything to disambiguate: on a
+  // Word -> Definition card the word is already given. The hint rides
+  // along after the definition rather than replacing any of it, since
+  // the definition text is what the card was built from.
+  const hint = card.type === 'def2word' ? definitionHintFor(card) : null;
+  const hintHtml = hint ? ` <span class="def-hint">[${hint}...]</span>` : '';
   const defContent = definitionVisible
-    ? `<div class="wd-content wd-definition${defHighlight}">${definition}</div>`
+    ? `<div class="wd-content wd-definition${defHighlight}">${definition}${hintHtml}</div>`
     : blurBlock('definition');
   // Uses imageSubjectFor's own (possibly enriched, see dictionary.js)
   // definition for the illustration rather than `definition` above —

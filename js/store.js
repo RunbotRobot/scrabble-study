@@ -456,6 +456,44 @@ export function searchByDefinition(query, { deckOnly = false, limit = 100 } = {}
   };
 }
 
+/** The fewest leading letters of a Definition -> Word card's answer that
+ * tell it apart from every other word in your deck defined by the same
+ * text, or null when nothing else in the deck shares the definition.
+ *
+ * AUNTIE and AUNTY are both "aunt", and the pictures were the only way
+ * to say which was being asked for. Their hints are AUNTI and AUNTY:
+ * one letter past the point where each stops agreeing with the other.
+ * SCANDIUM and SAMARIUM would be SC and SA, and a third metallic
+ * element starting SA would push both SAMARIUM's and its own to three
+ * letters.
+ *
+ * Computed on demand from the deck as it is now, rather than stored on
+ * the card, for exactly that last case: adding a word changes the hint
+ * of words already in the deck, and a stored hint would go stale the
+ * moment it did. It also keeps the card's identity (type + root +
+ * prompt) untouched, so nothing already in anyone's deck has to move.
+ *
+ * "Shares the definition" means identical text, which is what the card
+ * prompt is, not similar meaning. The hint can reach the whole word:
+ * AUNTY's does, since AUNTI is already taken, and COIN against COINS
+ * can't be told apart by a prefix at all. Those are the accepted
+ * edge cases. */
+export function definitionHintFor(card) {
+  if (!card || card.type !== 'def2word') return null;
+  const rivals = getCards()
+    .filter((c) => !c.deleted && c.type === 'def2word' && c.prompt === card.prompt && c.answer !== card.answer)
+    .map((c) => c.answer);
+  if (rivals.length === 0) return null;
+
+  let needed = 1;
+  for (const rival of rivals) {
+    let shared = 0;
+    while (shared < card.answer.length && shared < rival.length && card.answer[shared] === rival[shared]) shared++;
+    needed = Math.max(needed, shared + 1);
+  }
+  return card.answer.slice(0, Math.min(needed, card.answer.length));
+}
+
 /** All of a jumble's dictionary anagram solutions that also happen to be
  * in your deck (i.e. you have a non-deleted jumble card whose answer is
  * that word) — narrower than dictionary.js's getAnagramSolutions, which

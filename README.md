@@ -184,6 +184,31 @@ it, generated from that definition (see "Root word images" below). It
 never appears before the definition itself does, since it would
 otherwise give away the answer on a word2def card.
 
+### Telling apart words that share a definition
+
+On a **Definition → Word** card, when another word in your deck has the
+identical definition, the definition is followed by just enough leading
+letters to single out the answer. `AUNTIE` and `AUNTY` are both "aunt",
+so they read `aunt [AUNTI...]` and `aunt [AUNTY...]` — each hint is one
+letter past where the two stop agreeing. Two metallic elements,
+`SCANDIUM` and `SAMARIUM`, would read `[SC...]` and `[SA...]`; add a
+third starting `SA` and both of those `SA` words move to three letters.
+Before this the pictures were the only way to tell such cards apart.
+
+The hint is worked out when a card is drawn, from the deck as it is
+right then, not stored on the card. That is what lets adding a word
+change the hint on one already there, and it leaves the card's identity
+untouched, so nothing in an existing deck had to be migrated. "Same
+definition" means identical text, not similar meaning, and only words
+actually in your deck count — not every word in the dictionary that
+happens to share it. Word → Definition cards get no hint, since the
+word is already given.
+
+Two accepted edges: a hint can run to the whole word (`AUNTY`'s does,
+because `AUNTI` is already taken by the other), and a word that is a
+prefix of another (`COIN` and `COINS`) can't be told apart by leading
+letters at all, so it shows in full.
+
 ## Endings cards
 
 Some root senses point at a "self-explanatory" derived word instead of

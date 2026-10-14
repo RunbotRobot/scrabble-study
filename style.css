@@ -1008,3 +1008,14 @@ button.grade-incorrect { background: var(--bad); }
   color: var(--accent);
   line-height: 1.45;
 }
+
+/* The letters that tell a definition's word apart from the other words
+   in the deck sharing it (see definitionHintFor in js/store.js). Set off
+   from the definition so it reads as a clue to the answer rather than
+   part of the definition text. */
+.def-hint {
+  white-space: nowrap;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}

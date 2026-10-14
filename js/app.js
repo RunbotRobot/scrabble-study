@@ -13,6 +13,7 @@ import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
 import { imageSlotHtml, mountImageSlots, preloadImages } from './images.js';
+import { currentEndingsAnswer } from './cards.js';
 import { imageSubjectFor } from './dictionary.js';
 import { fetchVersion } from './version.js';
 import { initPersistence } from './idb-store.js';
@@ -201,8 +202,11 @@ function renderWordDefCard(card, revealed) {
  * whole point. A root with no definition on file has nothing to
  * illustrate and gets no slot, exactly as elsewhere. */
 function renderEndingsCard(card, revealed) {
+  // Shown as the rules compute it today, not as it was stored when the
+  // card was made — see currentEndingsAnswer.
+  const answer = currentEndingsAnswer(card.root_word, card.prompt) ?? card.answer;
   const answerContent = revealed
-    ? `<div class="wd-content wd-definition answer-highlight-endings">${card.answer}</div>`
+    ? `<div class="wd-content wd-definition answer-highlight-endings">${answer}</div>`
     : `<div class="answer-highlight-endings">${blurBlock('definition')}</div>`;
   // Keyed on the card's root word, not its prompt: once endings are
   // split by part of speech the prompt can read "TIDY (adj)", which is

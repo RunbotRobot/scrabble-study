@@ -8,19 +8,25 @@ const MAX_JUMBLE_LENGTH = 8;
  * letters. */
 const MAX_DEFINITION_ROOT_LENGTH = 8;
 
-/** An endings card leaves out a *related word* — an adverb, an
- * adjective, any other part of speech derived from the root — longer
- * than this many letters. DISMAY is not asked to know DISMAYINGLY.
+/** An endings card leaves out any word that is *added to* the root —
+ * an adverb, an adjective, any other part of speech derived from it,
+ * the -ILY adverb, a RE-/UN- form — once it runs past this many
+ * letters. DISMAY is not asked to know DISMAYINGLY, and GROUCHY is not
+ * asked to know GROUCHILY.
  *
- * It limits those and (almost) nothing else. The -ILY adverb is exempt,
- * for the reason given in endingsSpecs. Conjugations and plurals stay
+ * It limits those and nothing else. Conjugations and plurals stay
  * however long they run, and so do comparatives and superlatives
  * (CHOOSIEST is nine letters and belongs on CHOOSEY's card): they are
  * the root's own paradigm, not another word to learn. That split —
- * paradigm in whatever the length, related words only up to eight — is
- * the long-standing convention these cards are built to follow rather
- * than something derived from the data, which is why it is a stated
- * rule here and not an accident of which list a form came from. */
+ * paradigm in whatever the length, everything added only up to eight —
+ * is the long-standing convention these cards are built to follow
+ * rather than something derived from the data, which is why it is a
+ * stated rule here and not an accident of which list a form came from.
+ *
+ * It briefly had two exemptions, the -ILY adverb and the RE-/UN- forms.
+ * Both were removed: the first was an exemption I had inferred from an
+ * earlier "always include -ILY", and the second a case I had been
+ * unsure the rule covered. Neither was wanted. */
 const MAX_RELATED_FORM_LENGTH = 8;
 
 /** True for an inflection that none of the regular endings explain.
@@ -154,13 +160,12 @@ function adverbHome(groups) {
  * information, and it would also change the identity of every endings
  * card in every existing deck to no purpose. */
 function endingsSpecs(rootWord, allSenses) {
-  // The -ILY adverb is the one related word the length limit does not
-  // apply to. "Always include -ILY on a -Y word" was asked for outright,
-  // which is more specific than the general limit and so wins where they
-  // meet — and they meet 74 times (GROUCHILY, CURSORILY, BLOTCHILY...).
-  // Exempted by identity rather than by where it was found, so it
-  // survives whether the source data listed it or it was added here.
-  const adverb = adverbFormFor(rootWord);
+  // The -ILY adverb is held to the same limit as any other related word
+  // (TIDILY yes, GROUCHILY no): "always include -ILY" means include it
+  // whether or not the source data bothered to list it, not regardless
+  // of length.
+  const rawAdverb = adverbFormFor(rootWord);
+  const adverb = rawAdverb && rawAdverb.length <= MAX_RELATED_FORM_LENGTH ? rawAdverb : null;
 
   // Over-long related words are dropped here, before anything is
   // grouped, because a sense whose only content was one of them has
@@ -170,7 +175,7 @@ function endingsSpecs(rootWord, allSenses) {
   // identity for no reason. Inflections are not touched.
   const senses = allSenses.map((s) => ({
     ...s,
-    derived: s.derived.filter((d) => d.word === adverb || d.word.length <= MAX_RELATED_FORM_LENGTH),
+    derived: s.derived.filter((d) => d.word.length <= MAX_RELATED_FORM_LENGTH),
   }));
 
   const groups = new Map();
@@ -180,7 +185,9 @@ function endingsSpecs(rootWord, allSenses) {
     groups.get(s.pos).push(s);
   }
 
-  const prefixForms = [`RE${rootWord}`, `UN${rootWord}`].filter((w) => wordExists(w));
+  const prefixForms = [`RE${rootWord}`, `UN${rootWord}`].filter(
+    (w) => wordExists(w) && w.length <= MAX_RELATED_FORM_LENGTH
+  );
   // With no group to attach them to there is still a card to make: a
   // root whose only extra facts are that UNFOO and FOOILY exist should
   // say so. CURSORY is the shape of this — no inflections at all, but
@@ -236,6 +243,24 @@ function endingsSpecs(rootWord, allSenses) {
     specs.push({ type: 'endings', prompt: labelled ? `${rootWord} (${pos})` : rootWord, answer });
   }
   return specs;
+}
+
+/** What an endings card's answer should read *now*, or null if the
+ * current rules no longer produce that card at all.
+ *
+ * A card stores the answer it was built with, and the rules for what
+ * goes on one have changed more than once. Rewriting the stored text in
+ * the database each time is both laborious and dangerous in a store
+ * that syncs by newest timestamp: an edit made out here carries someone
+ * else's stale scheduling and a made-up time, and can quietly overwrite
+ * progress made in the meantime. So the card is shown as the rules
+ * compute it, matched on root and prompt, and the stored text is only
+ * the fallback. Only the answer is read from here — the prompt is part
+ * of the card's identity and is never rewritten. */
+export function currentEndingsAnswer(rootWord, prompt) {
+  const specs = buildCardSpecs(rootWord);
+  const spec = specs && specs.find((s) => s.type === 'endings' && s.prompt === prompt);
+  return spec ? spec.answer : null;
 }
 
 /** Builds the flashcard specs for a root word: a word->definition card,

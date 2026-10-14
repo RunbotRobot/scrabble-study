@@ -224,26 +224,41 @@ read past, past participle, `-ING`, `-S` (e.g. `PREVISED, PREVISING,
 PREVISES`), and where a root has both a regular and an irregular
 plural, the regular one comes first (e.g. `MACULAS, MACULAE`).
 
-**What length does to an endings card.** A related word — an adverb,
-an adjective, any other part of speech derived from the root — is left
-off when it runs past eight letters: `DISMAY` is not asked to know
-`DISMAYINGLY`. Everything in the root's own paradigm is kept at any
-length: conjugations (`OUTYIELDING`, eleven letters) and plurals, and
-comparatives and superlatives too (`CHOOSIEST`, `GROUCHIEST`). The split
-is a convention rather than something the data implies, so it is a
-stated rule in `js/cards.js` and not a side effect of which list a form
-was found in. The cutoff is applied before a root's senses are grouped
-by part of speech, so a sense whose only content was an over-long word
-doesn't linger as a phantom "(adj)" label on a card that is the root's
-only one. A root left with nothing at all — `XERIC`, whose only ending
-was `XERICALLY` — gets no endings card.
+**What length does to an endings card.** Anything *added to* the root is
+left off once it runs past eight letters: a related word (an adverb, an
+adjective, any other part of speech derived from it), the `-ILY`
+adverb, and a `RE-`/`UN-` form. `DISMAY` is not asked to know
+`DISMAYINGLY`, `GROUCHY` is not asked to know `GROUCHILY`, and
+`SORPTION` is not asked to know `RESORPTION`. Everything in the root's
+own paradigm is kept at any length: conjugations (`OUTYIELDING`, eleven
+letters) and plurals, and comparatives and superlatives too
+(`CHOOSIEST`, `GROUCHIEST`). The split is a convention rather than
+something the data implies, so it is a stated constant in `js/cards.js`
+and not a side effect of which list a form was found in.
 
-Two things the length rule deliberately does not touch. The `-ILY`
-adverb is exempt: "always include it" was asked for outright, which is
-more specific than the general cutoff and wins where they meet — 74
-times, `GROUCHILY` and `CURSORILY` among them. And `RE-`/`UN-` forms
-are left as they were, being neither a conjugation nor a related part
-of speech; 856 of those currently run past eight letters.
+"Always include `-ILY`" means include the adverb whether or not the
+source data bothered to list it — `TIDILY` is on `TIDY (adj)` even though
+the dictionary doesn't say so — not regardless of length. Briefly it was
+exempt from the limit and so were the `RE-`/`UN-` forms; neither
+exemption was wanted.
+
+The cutoff is applied before a root's senses are grouped by part of
+speech, so a sense whose only content was an over-long word doesn't
+linger as a phantom "(adj)" label on a card that is the root's only one.
+A root left with nothing at all — `XERIC`, whose only ending was
+`XERICALLY` — gets no endings card.
+
+**An endings card is shown as the rules compute it today, not as it was
+stored.** The rules for what goes on one have changed several times, and
+rewriting stored text in the database each time turned out to be
+dangerous: sync merges by newest timestamp, so an edit made from outside
+carries someone's stale scheduling and an invented time, and silently
+overwrites whatever was answered in the meantime — it made one card
+reappear every other question during an intensive drill. So the card's
+answer is looked up from the current builder by root and prompt when it
+is drawn (`currentEndingsAnswer`), and the stored text is only the
+fallback for a card the current rules no longer produce. The prompt, which
+is part of the card's identity, is never rewritten.
 
 There is one card per part of speech the root is defined under. `TIDY`
 is an adjective that goes `TIDIER, TIDIEST` and a verb that goes

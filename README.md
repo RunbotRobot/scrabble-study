@@ -224,6 +224,27 @@ read past, past participle, `-ING`, `-S` (e.g. `PREVISED, PREVISING,
 PREVISES`), and where a root has both a regular and an irregular
 plural, the regular one comes first (e.g. `MACULAS, MACULAE`).
 
+**What length does to an endings card.** A related word — an adverb,
+an adjective, any other part of speech derived from the root — is left
+off when it runs past eight letters: `DISMAY` is not asked to know
+`DISMAYINGLY`. Everything in the root's own paradigm is kept at any
+length: conjugations (`OUTYIELDING`, eleven letters) and plurals, and
+comparatives and superlatives too (`CHOOSIEST`, `GROUCHIEST`). The split
+is a convention rather than something the data implies, so it is a
+stated rule in `js/cards.js` and not a side effect of which list a form
+was found in. The cutoff is applied before a root's senses are grouped
+by part of speech, so a sense whose only content was an over-long word
+doesn't linger as a phantom "(adj)" label on a card that is the root's
+only one. A root left with nothing at all — `XERIC`, whose only ending
+was `XERICALLY` — gets no endings card.
+
+Two things the length rule deliberately does not touch. The `-ILY`
+adverb is exempt: "always include it" was asked for outright, which is
+more specific than the general cutoff and wins where they meet — 74
+times, `GROUCHILY` and `CURSORILY` among them. And `RE-`/`UN-` forms
+are left as they were, being neither a conjugation nor a related part
+of speech; 856 of those currently run past eight letters.
+
 There is one card per part of speech the root is defined under. `TIDY`
 is an adjective that goes `TIDIER, TIDIEST` and a verb that goes
 `TIDIED, TIDYING, TIDIES`, and a single merged list asked you to recall

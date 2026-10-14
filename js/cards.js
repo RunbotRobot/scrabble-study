@@ -8,6 +8,21 @@ const MAX_JUMBLE_LENGTH = 8;
  * letters. */
 const MAX_DEFINITION_ROOT_LENGTH = 8;
 
+/** An endings card leaves out a *related word* — an adverb, an
+ * adjective, any other part of speech derived from the root — longer
+ * than this many letters. DISMAY is not asked to know DISMAYINGLY.
+ *
+ * It limits those and (almost) nothing else. The -ILY adverb is exempt,
+ * for the reason given in endingsSpecs. Conjugations and plurals stay
+ * however long they run, and so do comparatives and superlatives
+ * (CHOOSIEST is nine letters and belongs on CHOOSEY's card): they are
+ * the root's own paradigm, not another word to learn. That split —
+ * paradigm in whatever the length, related words only up to eight — is
+ * the long-standing convention these cards are built to follow rather
+ * than something derived from the data, which is why it is a stated
+ * rule here and not an accident of which list a form came from. */
+const MAX_RELATED_FORM_LENGTH = 8;
+
 /** True for an inflection that none of the regular endings explain.
  * What such a form actually *is* can't be read off the letters — that
  * depends on the part of speech that produced it (see
@@ -138,7 +153,26 @@ function adverbHome(groups) {
  * this app deliberately drops from definitions for adding noise without
  * information, and it would also change the identity of every endings
  * card in every existing deck to no purpose. */
-function endingsSpecs(rootWord, senses) {
+function endingsSpecs(rootWord, allSenses) {
+  // The -ILY adverb is the one related word the length limit does not
+  // apply to. "Always include -ILY on a -Y word" was asked for outright,
+  // which is more specific than the general limit and so wins where they
+  // meet — and they meet 74 times (GROUCHILY, CURSORILY, BLOTCHILY...).
+  // Exempted by identity rather than by where it was found, so it
+  // survives whether the source data listed it or it was added here.
+  const adverb = adverbFormFor(rootWord);
+
+  // Over-long related words are dropped here, before anything is
+  // grouped, because a sense whose only content was one of them has
+  // nothing left to contribute: left in the grouping it would still
+  // count as a part of speech, and the root would be labelled "(adj)"
+  // on a card that is the only one it has — changing that card's
+  // identity for no reason. Inflections are not touched.
+  const senses = allSenses.map((s) => ({
+    ...s,
+    derived: s.derived.filter((d) => d.word === adverb || d.word.length <= MAX_RELATED_FORM_LENGTH),
+  }));
+
   const groups = new Map();
   for (const s of senses) {
     if (s.inflections.length === 0 && s.derived.length === 0) continue;
@@ -147,7 +181,6 @@ function endingsSpecs(rootWord, senses) {
   }
 
   const prefixForms = [`RE${rootWord}`, `UN${rootWord}`].filter((w) => wordExists(w));
-  const adverb = adverbFormFor(rootWord);
   // With no group to attach them to there is still a card to make: a
   // root whose only extra facts are that UNFOO and FOOILY exist should
   // say so. CURSORY is the shape of this — no inflections at all, but

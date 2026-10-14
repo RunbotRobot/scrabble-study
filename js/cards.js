@@ -1,4 +1,4 @@
-import { getRootSenses, wordExists, partsOfSpeechFor } from './dictionary.js';
+import { getRootSenses, wordExists, partsOfSpeechFor, statesOfBeingFor } from './dictionary.js';
 import { jumble } from './jumble.js';
 
 /** No jumble cards for inflected forms longer than this many letters. */
@@ -132,13 +132,14 @@ function adverbFormFor(rootWord) {
   return partsOfSpeechFor(candidate).includes('adv') ? candidate : null;
 }
 
-/** Which group the -ILY adverb belongs with. An adverb in -ILY is the
- * adverb of an adjective — tidily is the manner of being tidy, not of
- * the verb to tidy — so an adjective group takes it whenever the root
- * has one, which covers 528 of the 549. The rest have no adjective
- * sense carrying endings at all, and fall to the first group so the
- * word still gets said somewhere. */
-function adverbHome(groups) {
+/** Which group the words that belong to an adjective attach to: the
+ * -ILY adverb and the -NESS noun. An -ILY adverb is the adverb of an
+ * adjective — tidily is the manner of being tidy, not of the verb to
+ * tidy — and a -NESS noun is the state of being one, so an adjective
+ * group takes both whenever the root has one, which covers 528 of the
+ * 549 -ILY cases. The rest have no adjective sense carrying endings at
+ * all, and fall to the first group so the word still gets said. */
+function adjectiveHome(groups) {
   const positions = [...groups.keys()];
   return positions.includes('adj') ? 'adj' : positions[0];
 }
@@ -167,6 +168,13 @@ function endingsSpecs(rootWord, allSenses) {
   const rawAdverb = adverbFormFor(rootWord);
   const adverb = rawAdverb && rawAdverb.length <= MAX_RELATED_FORM_LENGTH ? rawAdverb : null;
 
+  // Likewise the noun meaning "the state of being" an adjective —
+  // TIDINESS on TIDY. Always included when the dictionary has one, again
+  // within the same eight-letter limit, which is why it is mostly
+  // short adjectives that carry one (TIDINESS and DARKNESS fit;
+  // HAPPINESS does not).
+  const stateNouns = statesOfBeingFor(rootWord).filter((w) => w.length <= MAX_RELATED_FORM_LENGTH);
+
   // Over-long related words are dropped here, before anything is
   // grouped, because a sense whose only content was one of them has
   // nothing left to contribute: left in the grouping it would still
@@ -193,7 +201,11 @@ function endingsSpecs(rootWord, allSenses) {
   // say so. CURSORY is the shape of this — no inflections at all, but
   // CURSORILY is a word.
   if (groups.size === 0) {
-    const loose = [...(adverb ? [`${adverb} (adv)`] : []), ...prefixForms];
+    const loose = [
+      ...(adverb ? [`${adverb} (adv)`] : []),
+      ...stateNouns.map((w) => `${w} (n)`),
+      ...prefixForms,
+    ];
     if (loose.length === 0) return [];
     return [{ type: 'endings', prompt: rootWord, answer: loose.join(', ') }];
   }
@@ -203,9 +215,12 @@ function endingsSpecs(rootWord, allSenses) {
   // the group being built. SAVVY lists SAVVILY under its verb sense
   // while the rule below would file it under the adjective, so a
   // per-group check saw no clash and put it on both cards.
-  const adverbAlreadyListed =
-    adverb !== null && senses.some((sense) => sense.derived.some((d) => d.word === adverb));
-  const adverbPos = adverb && !adverbAlreadyListed ? adverbHome(groups) : null;
+  const listedBySource = new Set(senses.flatMap((sense) => sense.derived.map((d) => d.word)));
+  const adverbPos = adverb && !listedBySource.has(adverb) ? adjectiveHome(groups) : null;
+  // The same applies to the -NESS nouns, so one the source already lists
+  // is left where the source put it rather than said twice.
+  const statesToAdd = stateNouns.filter((w) => !listedBySource.has(w));
+  const statePos = statesToAdd.length > 0 ? adjectiveHome(groups) : null;
   const labelled = groups.size > 1;
 
   const specs = [];
@@ -236,6 +251,7 @@ function endingsSpecs(rootWord, allSenses) {
       }
     }
     if (pos === adverbPos) derivedForms.push({ word: adverb, pos: 'adv' });
+    if (pos === statePos) for (const w of statesToAdd) derivedForms.push({ word: w, pos: 'n' });
 
     const mine = prefixHomesByPos.get(pos) || [];
     const answer = [...inflections, ...derivedForms.map((d) => `${d.word} (${d.pos})`), ...mine].join(', ');

@@ -242,6 +242,21 @@ the dictionary doesn't say so — not regardless of length. Briefly it was
 exempt from the limit and so were the `RE-`/`UN-` forms; neither
 exemption was wanted.
 
+**The `-NESS` noun.** An adjective's endings include the noun meaning "the
+state of being" it, always, when the dictionary has one: `TIDINESS` is on
+`TIDY (adj)`, `DARKNESS` on `DARK`. It's recognised by its *definition* —
+"the state of being tidy", "the quality of being loud", "the quality or
+state of being sly" — not by its spelling. That catches irregular
+spellings a suffix rule can't (`CAGINESS` for `CAGEY`), and it can't be
+fooled by words that merely end in `-NESS` and mean something else:
+`WITNESS`, `BUSINESS`, `CHESS`, `LIONESS`. For the same reason `ILL`
+doesn't get `ILLNESS`, which the dictionary defines as "sickness" rather
+than as the state of being ill. It sits on the adjective's card when the
+root is more than one part of speech, so `TIDINESS` is on `TIDY (adj)`
+and not on `TIDY (v)`, and it is held to the same eight-letter limit as
+everything else added to a root. That makes it mostly a short
+adjective's word — `TIDINESS` and `DARKNESS` fit, `HAPPINESS` does not.
+
 The cutoff is applied before a root's senses are grouped by part of
 speech, so a sense whose only content was an over-long word doesn't
 linger as a phantom "(adj)" label on a card that is the root's only one.

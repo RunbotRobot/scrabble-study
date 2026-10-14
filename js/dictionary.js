@@ -82,6 +82,50 @@ export function partsOfSpeechFor(word) {
   return [...positions];
 }
 
+/** How the dictionary words a noun meaning "the state of being <word>":
+ * TIDINESS is "the state of being tidy", LOUDNESS "the quality of being
+ * loud", SLYNESS "the quality or state of being sly". The source states
+ * this in a very regular way and the definition is the only thing that
+ * actually ties such a noun to its adjective, so that is what is read.
+ *
+ * Reading the definition rather than building candidates from the
+ * spelling is deliberate. It catches the irregular spellings a suffix
+ * rule can't (CAGINESS belongs to CAGEY, HOMINESS to HOMEY), and it
+ * can't be fooled by words that merely end in -NESS and mean something
+ * else: WITNESS, BUSINESS, CHESS, LIONESS and NESS itself. */
+const STATE_OF_BEING_RE =
+  /^the (?:(?:quality|state) or )?(?:quality|state|condition|property|characteristic) of being (\w+)$/i;
+
+let stateOfBeingIndex = null;
+
+function buildStateOfBeingIndex() {
+  stateOfBeingIndex = new Map();
+  for (const word of wordList) {
+    if (!word.endsWith('NESS')) continue;
+    for (const sense of words[word].s || []) {
+      if (sense.p !== 'n' || !sense.d) continue;
+      const match = sense.d.match(STATE_OF_BEING_RE);
+      if (!match) continue;
+      const root = match[1].toUpperCase();
+      // Only an adjective has a "state of being" in this sense; TWONESS
+      // and IRONNESS point at a noun and a verb and are something else.
+      if (!(words[root]?.s || []).some((rootSense) => rootSense.p === 'adj')) continue;
+      if (!stateOfBeingIndex.has(root)) stateOfBeingIndex.set(root, []);
+      const list = stateOfBeingIndex.get(root);
+      if (!list.includes(word)) list.push(word);
+    }
+  }
+}
+
+/** The -NESS nouns meaning "the state of being `adjective`", e.g.
+ * TIDINESS for TIDY. Empty when `adjective` is not an adjective or has
+ * none. */
+export function statesOfBeingFor(adjective) {
+  requireLoaded();
+  if (!stateOfBeingIndex) buildStateOfBeingIndex();
+  return stateOfBeingIndex.get(adjective) || [];
+}
+
 /** True if `word` appears anywhere in the dictionary (as a root or as an
  * inflected form of one) — i.e. it's a legal Scrabble play. */
 export function wordExists(word) {

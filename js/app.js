@@ -12,7 +12,15 @@ import { getStreak, recordAnswer, resetStreak, MILESTONE_EVERY } from './streak.
 import { startBackgroundSync, scheduleSync, onStatusChange, getSyncId } from './sync.js';
 import { initSyncUI } from './sync-ui.js';
 import { initLookupUI } from './lookup-ui.js';
-import { imageSlotHtml, mountImageSlots, preloadImages } from './images.js';
+import {
+  imageSlotHtml,
+  mountImageSlots,
+  preloadImages,
+  imagesEnabled,
+  setImagesEnabled,
+  onImagesEnabledChange,
+  keepImagesAcrossReload,
+} from './images.js';
 import { currentEndingsAnswer } from './cards.js';
 import { imageSubjectFor } from './dictionary.js';
 import { fetchVersion } from './version.js';
@@ -83,6 +91,7 @@ function jumbleImageSubjects(card) {
 }
 
 function renderJumbleImages(card) {
+  if (!imagesEnabled()) return '';
   const subjects = jumbleImageSubjects(card);
   if (subjects.length === 0) return '';
   const imgs = subjects.map(({ root, definition }) => imageSlotHtml(root, definition)).join('');
@@ -241,6 +250,9 @@ function renderCardBody(card, revealed) {
 
 let currentCard = null;
 let currentIntroRemaining = 0;
+// Whether the card on screen is showing its answer — kept so that
+// redrawing it (see the pictures toggle) puts it back in the same state.
+let currentRevealed = false;
 
 function loadNextCard() {
   const { card, introRemaining } = getNextCard(currentCard ? currentCard.id : null);
@@ -251,8 +263,15 @@ function loadNextCard() {
   }
   currentCard = card;
   currentIntroRemaining = introRemaining;
+  renderQuestion();
+}
+
+/** Draws the current card with its answer hidden. */
+function renderQuestion() {
+  const card = currentCard;
+  currentRevealed = false;
   studyCard.innerHTML = `
-    ${typeLineFor(card, introRemaining)}
+    ${typeLineFor(card, currentIntroRemaining)}
     ${renderCardBody(card, false)}
     <button id="show-answer-btn" class="secondary">Show answer</button>
   `;
@@ -270,6 +289,7 @@ function loadNextCard() {
 
 function showAnswer() {
   if (!currentCard) return;
+  currentRevealed = true;
   studyCard.innerHTML = `
     ${typeLineFor(currentCard, currentIntroRemaining)}
     ${renderCardBody(currentCard, true)}
@@ -282,6 +302,20 @@ function showAnswer() {
   studyCard.querySelector('.grade-correct').addEventListener('click', () => grade(true));
   studyCard.querySelector('.grade-incorrect').addEventListener('click', () => grade(false));
 }
+
+/** Puts the card on screen back the way it was, redrawn — used when the
+ * pictures setting changes, so the switch takes effect on the card being
+ * looked at rather than from the next one. */
+function redrawCurrentCard() {
+  if (!currentCard) return;
+  if (currentRevealed) showAnswer();
+  else renderQuestion();
+}
+
+const imagesToggleEl = document.getElementById('images-toggle');
+imagesToggleEl.checked = imagesEnabled();
+imagesToggleEl.addEventListener('change', () => setImagesEnabled(imagesToggleEl.checked));
+onImagesEnabledChange(redrawCurrentCard);
 
 function showMilestoneMessage(text, isError = false) {
   milestoneMessageEl.textContent = text;
@@ -438,6 +472,9 @@ async function checkForNewVersion() {
   if (document.hidden || !loadedVersion) return;
   const latest = await fetchVersion({ bypassCache: true });
   if (latest && latest !== loadedVersion) {
+    // The app reloading itself shouldn't undo a session's choice to show
+    // pictures; see images.js. An ordinary open still starts without them.
+    keepImagesAcrossReload();
     location.reload();
   }
 }

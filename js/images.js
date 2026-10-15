@@ -1,6 +1,60 @@
 import { WORKER_URL } from './sync.js';
 import { openImageEditor } from './image-editor.js';
 
+/** Whether pictures are shown at all. Off every time the app is opened,
+ * on purpose: some sessions are quizzed with pictures and some without,
+ * and "without" is the one that should need no setup. It is held in
+ * memory only, never saved, so a fresh open can't inherit it.
+ *
+ * One exception, for the app reloading itself. A tab left open across a
+ * deploy reloads when it notices a newer version (see app.js), and that
+ * would otherwise switch pictures off in the middle of a session that
+ * had just switched them on. So just before such a reload the setting is
+ * left in sessionStorage for the next load to pick up, and picking it up
+ * *removes* it: it survives exactly that one reload and nothing further,
+ * so an ordinary open still starts with pictures off. */
+const HANDOFF_KEY = 'scrabbleStudy.imagesAcrossReload';
+
+function takeHandoff() {
+  try {
+    const carried = sessionStorage.getItem(HANDOFF_KEY) === '1';
+    sessionStorage.removeItem(HANDOFF_KEY);
+    return carried;
+  } catch {
+    return false;   // storage can be unavailable; the safe answer is "off"
+  }
+}
+
+let enabled = takeHandoff();
+const enabledListeners = new Set();
+
+export function imagesEnabled() {
+  return enabled;
+}
+
+export function setImagesEnabled(on) {
+  const next = Boolean(on);
+  if (next === enabled) return;
+  enabled = next;
+  for (const fn of enabledListeners) fn(enabled);
+}
+
+/** Calls `fn(enabled)` whenever the setting changes, so what is already
+ * on screen can be redrawn rather than waiting for the next card. */
+export function onImagesEnabledChange(fn) {
+  enabledListeners.add(fn);
+}
+
+/** Call immediately before the app reloads itself. */
+export function keepImagesAcrossReload() {
+  if (!enabled) return;
+  try {
+    sessionStorage.setItem(HANDOFF_KEY, '1');
+  } catch {
+    // Nothing to be done; pictures simply start off after the reload.
+  }
+}
+
 /** One-time cache-buster, and hopefully the last one. The image
  * endpoint used to answer with `max-age=31536000, immutable`, which was
  * simply untrue of a URL that PUT replaces and DELETE evicts: browsers
@@ -42,6 +96,7 @@ const preloaded = new Map();
  * the instant it's revealed rather than beginning the download then.
  * Words with no picture uploaded yet simply 404 and cost nothing. */
 export function preloadImages(words) {
+  if (!enabled) return;
   for (const word of words) {
     if (preloaded.has(word)) continue;
     const img = new Image();
@@ -82,6 +137,10 @@ function escapeAttr(s) {
  * that build HTML via innerHTML should include this, then call
  * mountImageSlots() on the container right after setting it. */
 export function imageSlotHtml(word, definition) {
+  // With pictures off there is no slot at all — not a hidden one — so
+  // nothing is fetched, probed or offered for upload, and every caller
+  // gets this for free.
+  if (!enabled) return '';
   return `
     <div class="wd-image-wrap" data-image-word="${escapeAttr(word)}" data-image-definition="${escapeAttr(definition || '')}">
       <div class="wd-image-checking"></div>

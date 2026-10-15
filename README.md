@@ -401,6 +401,24 @@ letter matches most of the dictionary and tells you nothing.
 
 ## Root word images
 
+**Pictures are off every time the app is opened.** Some sessions are
+quizzed with pictures and some without, and "without" is the one that
+should need no setup. **Options → Pictures → Show pictures on cards**
+turns them on, and the card you're looking at redraws at once in
+whatever state it was in, question or answer. With the setting off there
+is no picture slot at all, not a hidden one, so nothing is fetched,
+preloaded or offered for upload, in the cards or in the lookup panel; to
+add or edit a picture, turn it on.
+
+The setting is held in memory and never saved, so a fresh open can't
+inherit it. There is one deliberate exception. The app reloads itself
+when it notices a newer version has been deployed, and that would
+otherwise switch pictures off partway through a session that had just
+switched them on. Just before such a reload the setting is left in
+`sessionStorage` for the next load, and that load removes it, so it
+survives exactly that one reload and nothing further. An ordinary
+reload or a fresh open still starts with pictures off.
+
 Each root with a definition gets a small illustration slot — shown on
 word2def/def2word cards and endings cards (see "Card presentation"
 above), on jumble cards (see above), and in the lookup panel.

@@ -57,6 +57,16 @@ dropping the part-of-speech tag the source data carries per sense (`n`,
 `v`, `adj`, ...) — it's almost always obvious from the definition itself,
 so showing it added noise without adding information.
 
+## Picking up where you left off
+
+The card on screen is remembered on the device, so closing the app (or
+the app reloading itself for a new version) before answering puts the
+same card back when you return. It comes back as a fresh question, even
+if you had already tapped "Show answer". Once a card is answered the
+memory is cleared, and a remembered card that has since been deleted or
+held out of rotation is simply skipped. This is per device and is not
+synced.
+
 ## Streaks and introducing new cards
 
 Getting an answer right extends your current correct-answer streak;
@@ -275,6 +285,14 @@ is drawn (`currentEndingsAnswer`), and the stored text is only the
 fallback for a card the current rules no longer produce. The prompt, which
 is part of the card's identity, is never rewritten.
 
+Definitions get the same treatment (`currentDefinitionText`), so that a
+corrected definition shows on cards already in a deck. The corrections
+live in `DEFINITION_AMENDMENTS` in `scripts/build-dictionary.js`, each
+giving the source text it replaces so a later source edition can't be
+overwritten silently. There is one: `KIDDO`'s "used as a form of familiar
+address" now ends "(n)", since it otherwise reads as an interjection and
+implies there is no plural.
+
 There is one card per part of speech the root is defined under. `TIDY`
 is an adjective that goes `TIDIER, TIDIEST` and a verb that goes
 `TIDIED, TIDYING, TIDIES`, and a single merged list asked you to recall
@@ -288,7 +306,12 @@ the part-of-speech tag this app deliberately drops from definitions for
 adding noise without information.
 
 A root ending in `-Y` also gets its `-ILY` adverb, when one exists:
-`TIDY (adj)` carries `TIDILY`. It's a word you can play, and the source
+`TIDY (adj)` carries `TIDILY`. The short one-syllable adjectives take
+`-LY` on the whole word instead (`SLYLY`, `SHYLY`, `WRYLY`, `COYLY`,
+`GAYLY`, `GRAYLY`, `GREYLY`, `FEYLY`, `SPRYLY`), and `DRY` has both, so
+`DRY (adj)` reads `DRILY, DRYLY`. Both spellings are tried and each is
+kept only if it is genuinely an adverb; the same eight-letter limit and
+"only if the source hasn't already placed it" rule apply to each. It's a word you can play, and the source
 data only sometimes records it — of the 549 that exist, it lists barely
 a handful. The candidate is built by replacing the `-Y`, then checked
 to be genuinely an adverb rather than merely a word, because stripping
@@ -321,13 +344,46 @@ and the past participle, so it belongs with the conjugations whatever
 it looks like, and whether or not a regular `-ED` is also present
 (`SHOW` has both, as `SHOWED, SHOWN`).
 
-A root ending in `-O` that has both plural spellings reads `-OS` before
-`-OES` (`ZEROS, ZEROES`). Both end in `S`, so the ranking above can't
-separate them and they used to come out in whatever order the source
-data happened to list them — which isn't consistent between entries:
-`ZERO` and `CARGO` list the `-OES` form first, `SOLO` the `-OS` one.
-Verbs ending in `-O` get the same treatment, since the third person has
-the same pair (`ECHOS, ECHOES`).
+Among forms ending in `S`, the regular one comes first. Plurals (and a
+verb's third person) all end in `S`, so the ranking above can't separate
+them, and the source lists them in no reliable order: `ECDYSIS` lists
+the classical `ECDYSES` ahead of `ECDYSISES`, `FLAN` lists `FLANES` ahead
+of `FLANS`, and `ZERO` and `CARGO` list the `-OES` form first where
+`SOLO` lists `-OS`. So the regular form is worked out from the root's
+spelling — `-S`, `-ES` after `S X Z CH SH`, `-IES` after consonant + `Y`
+— and put first (`ECDYSISES, ECDYSES`; `FLANS, FLANES`). For a root
+ending in `-O`, `-OS` is the regular one and `-OES` follows it
+(`ZEROS, ZEROES`), and verbs ending in `-O` get the same treatment
+(`ECHOS, ECHOES`). A plural spelled like the singular (`CANTUS`,
+`HERPES`) counts as regular and keeps its place. Across the dictionary
+this reorders about 150 cards.
+
+**`RE-` words are part of their root's set.** A word like `REALLOT` is
+"to allot again" and nothing more, so it is learned as part of `ALLOT`,
+not as a word of its own. It is recognised from its definition: the word
+must be `RE-` plus a word that is a root in its own right, and every
+sense must be the plain "to <root> again" (`REDO` is also allowed its
+noun sense, "something that is done again"). `REPORTER` ("one that
+reports") and `RELAY` (which also means to send along) are not obvious
+and are studied normally, and `RELUME` is left alone because there is no
+`LUME`. Studying such a word, by any route (Add Word, a random pick, a
+conjugated form like `REALLOTTED`), studies its root instead, and:
+
+- it gets no Word → Definition or Definition → Word cards;
+- the root's set gains jumbles for the `RE-` word and its conjugations,
+  8 letters or shorter (`REDRY`, `REDRIED`, `REDRYING`, `REDRIES` for
+  `DRY`). They are filed under the `RE-` word, not the root, because a
+  card's identity includes the jumbled letters and `REDRY` is an anagram
+  of `DRYER`; a jumble already in the deck, under any root, is not made
+  a second time;
+- its picture is the root's.
+
+A deck is brought in line the next time the app starts (after a sync,
+if sync is set up): `RE-` words already studied as roots lose their
+definition cards — as an ordinary deletion stamped with the current
+time, so it syncs like one — while their endings and jumble cards stay,
+and every studied root gains any `RE-` jumbles it lacks, as new cards.
+Only `RE-` is treated this way; `UN-` forms are not.
 
 That test needs the part of speech to mean anything, because the same
 "matches nothing" condition picks out an irregular plural on a noun

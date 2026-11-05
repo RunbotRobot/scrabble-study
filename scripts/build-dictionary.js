@@ -48,6 +48,22 @@ const DERIVED_ITEM_RE = /([A-Z]+)\s*\[([a-z]+)\]/g;
 const SENSE_RE = /^(.*?)\[([a-z]+)\s*([^\]]*)\]$/i;
 const YEAR_SUFFIX_RE = /\s\((\d{4})\)$/;
 
+// Definitions the source words in a way that misleads on a flashcard,
+// replaced after parsing. Each is keyed by word and gives the text it
+// replaces as well as the new text, so that if a later source edition
+// words it differently the build says so instead of silently overwriting
+// something else.
+//
+// KIDDO is "used as a form of familiar address", which reads as an
+// interjection like HEY, and so implies there is no plural. There is
+// (KIDDOS, KIDDOES), so the part of speech goes on the end.
+const DEFINITION_AMENDMENTS = {
+  KIDDO: {
+    from: 'used as a form of familiar address',
+    to: 'used as a form of familiar address (n)',
+  },
+};
+
 function cleanDefinition(text) {
   return text.replace(SHORTHAND_RE, '$1').trim();
 }
@@ -136,6 +152,12 @@ function main() {
     if (crossrefSenses.length > 0) {
       entry.x = crossrefSenses.map((s) => ({ p: s.pos, r: s.root }));
       crossrefCount += crossrefSenses.length;
+    }
+    const amendment = DEFINITION_AMENDMENTS[word];
+    if (amendment) {
+      const sense = (entry.s || []).find((x) => x.d === amendment.from);
+      if (!sense) throw new Error(`Cannot amend ${word}: no sense reads "${amendment.from}"`);
+      sense.d = amendment.to;
     }
     words[word] = entry;
   }

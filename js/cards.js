@@ -1,4 +1,4 @@
-import { getRootSenses, wordExists, partsOfSpeechFor, statesOfBeingFor } from './dictionary.js';
+import { getRootSenses, wordExists, partsOfSpeechFor, statesOfBeingFor, obviousReBase } from './dictionary.js';
 import { jumble } from './jumble.js';
 
 /** No jumble cards for inflected forms longer than this many letters. */
@@ -10,7 +10,7 @@ const MAX_DEFINITION_ROOT_LENGTH = 8;
 
 /** An endings card leaves out any word that is *added to* the root —
  * an adverb, an adjective, any other part of speech derived from it,
- * the -ILY adverb, a RE-/UN- form — once it runs past this many
+ * the -ILY and -YLY adverbs, a RE-/UN- form — once it runs past this many
  * letters. DISMAY is not asked to know DISMAYINGLY, and GROUCHY is not
  * asked to know GROUCHILY.
  *
@@ -37,18 +37,40 @@ function isIrregularForm(form) {
   return !form.endsWith('ED') && !form.endsWith('ING') && !form.endsWith('S');
 }
 
-/** Separates the two plural spellings a root ending in -O can take, so
- * that -OS comes before -OES (ZEROS, ZEROES). Both end in S, so the
- * ranking above cannot tell them apart and they fell out in whatever
- * order the source data listed them — which is not even consistent
- * between entries: ZERO and CARGO list the -OES form first, SOLO the
- * -OS form. Returned as a tiebreaker rather than folded into the main
- * ranking because it only ever decides between two forms that already
- * rank the same. Verbs get the same treatment, since -O verbs have the
- * same pair for the third person (ECHOS, ECHOES). */
-function oPluralRank(form, rootWord) {
-  if (!rootWord.endsWith('O')) return 0;
-  return form === `${rootWord}ES` ? 1 : 0;
+/** The plural of a noun, or third-person singular of a verb, that the
+ * ordinary spelling rules give: -S, -ES after a sibilant (ECDYSIS,
+ * ECDYSISES), -IES for a consonant plus Y. Nothing about the data says
+ * which of a root's S-forms is this one, and the source lists them in no
+ * reliable order — ECDYSIS lists ECDYSES, the classical plural, ahead of
+ * the regular ECDYSISES, and FLAN lists FLANES (a plural only in the
+ * sense that it is a word) ahead of FLANS — so the regular form is
+ * identified from the root's spelling and put first. */
+function regularSForm(rootWord) {
+  if (/[^AEIOU]Y$/.test(rootWord)) return `${rootWord.slice(0, -1)}IES`;
+  if (/(S|X|Z|CH|SH)$/.test(rootWord)) return `${rootWord}ES`;
+  return `${rootWord}S`;
+}
+
+/** Orders the forms that end in S among themselves, as a tiebreaker only
+ * (it decides between forms the main ranking already ties, so it never
+ * moves anything across ED/ING/irregular): the regular form first, then
+ * the alternative spelling that is merely less common, then anything
+ * else.
+ *
+ * For a root ending in -O the alternative is -OES: ZEROS before
+ * ZEROES, and verbs have the same pair (ECHOS, ECHOES). The source is no
+ * more consistent there — ZERO and CARGO list the -OES form first, SOLO
+ * the -OS form. A root ending in a sibilant is held to the regular -ES,
+ * so a variant that doubles the consonant (GASSES for GAS) follows
+ * GASES. */
+function sFormRank(form, rootWord) {
+  if (!form.endsWith('S')) return 0;
+  // A plural spelled like the singular (CANTUS, HERPES, SIEMENS) is the
+  // usual one for those words, not a variant, and stays where the source
+  // put it relative to the regular form.
+  if (form === regularSForm(rootWord) || form === rootWord) return 0;
+  if (rootWord.endsWith('O') && form === `${rootWord}ES`) return 1;
+  return 2;
 }
 
 /** Sorts inflected forms into a natural reading order — verb
@@ -112,24 +134,29 @@ function prefixHomes(prefixForms, groups) {
   return homes;
 }
 
-/** The -ILY adverb of a root ending in -Y, when the dictionary has one:
- * TIDY gives TIDILY. Worth stating on every such card, because it is a
- * word you can play and the source data only sometimes bothers to
- * record it — of the 549 that exist, it lists barely a handful as
- * derived forms.
+/** The adverbs of a root ending in -Y, when the dictionary has them:
+ * TIDY gives TIDILY, and DRY gives both DRILY and DRYLY. Worth stating on
+ * every such card, because they are words you can play and the source
+ * data only sometimes bothers to record them — of the 549 -ILY adverbs
+ * that exist, it lists barely a handful as derived forms.
  *
- * Built by replacing the -Y and then checking the result is really an
- * adverb, not merely a word. Stripping letters and appending three more
- * lands on unrelated entries often enough to matter: OY would otherwise
- * claim OILY, DAY would claim DAILY and HOMY would claim HOMILY, none
- * of which are adverbs of anything. That test has to look at crossrefs
- * as well as senses, since most of these adverbs (COZILY, ICKILY) have
- * no sense of their own — only a crossref recording what they are. */
-function adverbFormFor(rootWord) {
-  if (!rootWord.endsWith('Y')) return null;
-  const candidate = `${rootWord.slice(0, -1)}ILY`;
-  if (!wordExists(candidate)) return null;
-  return partsOfSpeechFor(candidate).includes('adv') ? candidate : null;
+ * There are two spellings to try: the -Y swapped for -ILY, which is the
+ * rule, and the root with -LY simply added, which the short one-syllable
+ * adjectives take instead (SLYLY, SHYLY, WRYLY) and DRY takes as well.
+ * Only DRY has both. The -ILY one is listed first.
+ *
+ * Each is built from the root and then checked to really be an adverb,
+ * not merely a word. Stripping letters and appending three more lands on
+ * unrelated entries often enough to matter: OY would otherwise claim
+ * OILY, DAY would claim DAILY and HOMY would claim HOMILY, none of which
+ * are adverbs of anything. That test has to look at crossrefs as well as
+ * senses, since most of these adverbs (COZILY, ICKILY) have no sense of
+ * their own — only a crossref recording what they are. */
+function adverbFormsFor(rootWord) {
+  if (!rootWord.endsWith('Y')) return [];
+  return [`${rootWord.slice(0, -1)}ILY`, `${rootWord}LY`].filter(
+    (candidate) => wordExists(candidate) && partsOfSpeechFor(candidate).includes('adv')
+  );
 }
 
 /** Which group the words that belong to an adjective attach to: the
@@ -165,8 +192,7 @@ function endingsSpecs(rootWord, allSenses) {
   // (TIDILY yes, GROUCHILY no): "always include -ILY" means include it
   // whether or not the source data bothered to list it, not regardless
   // of length.
-  const rawAdverb = adverbFormFor(rootWord);
-  const adverb = rawAdverb && rawAdverb.length <= MAX_RELATED_FORM_LENGTH ? rawAdverb : null;
+  const adverbs = adverbFormsFor(rootWord).filter((w) => w.length <= MAX_RELATED_FORM_LENGTH);
 
   // Likewise the noun meaning "the state of being" an adjective —
   // TIDINESS on TIDY. Always included when the dictionary has one, again
@@ -202,7 +228,7 @@ function endingsSpecs(rootWord, allSenses) {
   // CURSORILY is a word.
   if (groups.size === 0) {
     const loose = [
-      ...(adverb ? [`${adverb} (adv)`] : []),
+      ...adverbs.map((w) => `${w} (adv)`),
       ...stateNouns.map((w) => `${w} (n)`),
       ...prefixForms,
     ];
@@ -216,7 +242,8 @@ function endingsSpecs(rootWord, allSenses) {
   // while the rule below would file it under the adjective, so a
   // per-group check saw no clash and put it on both cards.
   const listedBySource = new Set(senses.flatMap((sense) => sense.derived.map((d) => d.word)));
-  const adverbPos = adverb && !listedBySource.has(adverb) ? adjectiveHome(groups) : null;
+  const adverbsToAdd = adverbs.filter((w) => !listedBySource.has(w));
+  const adverbPos = adverbsToAdd.length > 0 ? adjectiveHome(groups) : null;
   // The same applies to the -NESS nouns, so one the source already lists
   // is left where the source put it rather than said twice.
   const statesToAdd = stateNouns.filter((w) => !listedBySource.has(w));
@@ -238,7 +265,7 @@ function endingsSpecs(rootWord, allSenses) {
     const inflections = [...inflectionSet].sort(
       (a, b) =>
         inflectionRank(a, irregularVerbForms) - inflectionRank(b, irregularVerbForms) ||
-        oPluralRank(a, rootWord) - oPluralRank(b, rootWord)
+        sFormRank(a, rootWord) - sFormRank(b, rootWord)
     );
 
     const derivedForms = [];
@@ -250,7 +277,7 @@ function endingsSpecs(rootWord, allSenses) {
         derivedForms.push(d);
       }
     }
-    if (pos === adverbPos) derivedForms.push({ word: adverb, pos: 'adv' });
+    if (pos === adverbPos) for (const w of adverbsToAdd) derivedForms.push({ word: w, pos: 'adv' });
     if (pos === statePos) for (const w of statesToAdd) derivedForms.push({ word: w, pos: 'n' });
 
     const mine = prefixHomesByPos.get(pos) || [];
@@ -277,6 +304,46 @@ export function currentEndingsAnswer(rootWord, prompt) {
   const specs = buildCardSpecs(rootWord);
   const spec = specs && specs.find((s) => s.type === 'endings' && s.prompt === prompt);
   return spec ? spec.answer : null;
+}
+
+/** The definition text a root's definition cards should read *now*, or
+ * null if it has none. Same idea as currentEndingsAnswer, and for the same
+ * reason: a card keeps the text it was built with, and a definition that
+ * has since been corrected (KIDDO's, which gained a "(n)") would otherwise
+ * stay wrong on every card already in a deck. The card's prompt is part of
+ * its identity and is not rewritten; only what is shown changes. */
+export function currentDefinitionText(rootWord) {
+  const senses = getRootSenses(rootWord);
+  if (!senses) return null;
+  const text = senses
+    .filter((s) => s.definition)
+    .map((s) => s.definition)
+    .join(' / ');
+  return text || null;
+}
+
+/** Jumble cards for the obvious RE- form of a root, and its conjugations
+ * (REDRY, REDRIED, REDRYING, REDRIES for DRY) — each up to MAX_JUMBLE_LENGTH
+ * letters, like any other jumble.
+ *
+ * The RE- word is on the root's endings card, as the answer, and has no
+ * definition cards of its own — it is "to dry again" and nothing more (see
+ * obviousReBase). Its letters are still worth drilling, though, and a form
+ * the endings card names only once can't be drilled from that. So the
+ * root's set carries them, but the cards are filed under the RE- word
+ * (`root` on each spec) and not under the root: a card's identity is its
+ * type, root and jumbled letters, and REDRY is an anagram of DRYER, which
+ * the root already has — filed under DRY, one of the two would have
+ * overwritten the other. It is also exactly what a REALLOT studied as a
+ * root of its own already holds, so those cards are the same cards. */
+export function reFormJumbleSpecs(rootWord) {
+  const reWord = `RE${rootWord}`;
+  if (obviousReBase(reWord) !== rootWord) return [];
+  const forms = new Set([reWord]);
+  for (const s of getRootSenses(reWord)) for (const form of s.inflections) forms.add(form);
+  return [...forms]
+    .filter((form) => form.length <= MAX_JUMBLE_LENGTH)
+    .map((form) => ({ type: 'jumble', prompt: jumble(form), answer: form, root: reWord }));
 }
 
 /** Builds the flashcard specs for a root word: a word->definition card,
@@ -308,7 +375,11 @@ export function buildCardSpecs(rootWord) {
 
   const specs = [];
   if (rootWord.length <= MAX_DEFINITION_ROOT_LENGTH) {
-    if (definitionText) {
+    // Nothing to define for an obvious RE- word — "to allot again" is what
+    // REALLOT is, and ALLOT's own set (see reFormJumbleSpecs) covers it.
+    // Its endings card is still built, so a REALLOT already in a deck
+    // keeps reading correctly.
+    if (definitionText && !obviousReBase(rootWord)) {
       specs.push({ type: 'word2def', prompt: rootWord, answer: definitionText });
       specs.push({ type: 'def2word', prompt: definitionText, answer: rootWord });
     }
@@ -320,6 +391,7 @@ export function buildCardSpecs(rootWord) {
     if (form.length > MAX_JUMBLE_LENGTH) continue;
     specs.push({ type: 'jumble', prompt: jumble(form), answer: form });
   }
+  specs.push(...reFormJumbleSpecs(rootWord));
 
   return specs;
 }

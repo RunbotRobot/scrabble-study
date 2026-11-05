@@ -19,7 +19,7 @@ const SHELL_CACHE = 'scrabble-study-shell-v5';
 // cache-first, so without a new cache name every existing install would
 // go on using the copy where 277 entries had their inflections stranded
 // inside the definition text.
-const DATA_CACHE = 'scrabble-study-data-v6';
+const DATA_CACHE = 'scrabble-study-data-v7';
 
 const SHELL_ASSETS = [
   './',

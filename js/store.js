@@ -15,14 +15,16 @@
 
 import {
   pickRandomWord,
-  resolveRoots,
+  resolveStudyRoots,
+  obviousReBase,
+  studyRootOf,
   wordExists,
   wordCount,
   getRootSenses,
   getAnagramSolutions,
   searchDefinitions,
 } from './dictionary.js';
-import { buildCardSpecs } from './cards.js';
+import { buildCardSpecs, reFormJumbleSpecs } from './cards.js';
 import { initialState, schedule, DEFAULT_EASE } from './srs.js';
 import { get, set, describeStorageQuota } from './idb-store.js';
 
@@ -87,7 +89,7 @@ export async function queueWord(rawWord) {
   if (!wordExists(word)) return { ok: false, message: `"${word}" isn't in the Scrabble dictionary.` };
 
   const selectedSet = new Set(getSelected().map((s) => s.root_word));
-  const roots = resolveRoots(word);
+  const roots = resolveStudyRoots(word);
   if (roots.every((r) => selectedSet.has(r))) {
     return { ok: false, message: `${word} is already in your deck.` };
   }
@@ -122,7 +124,7 @@ export function getWordInfo(rawWord) {
     return { word, exists: false };
   }
 
-  const roots = resolveRoots(word);
+  const roots = resolveStudyRoots(word);
   const selectedSet = new Set(getSelected().map((s) => s.root_word));
   const added = roots.length > 0 && roots.every((r) => selectedSet.has(r));
 
@@ -139,7 +141,7 @@ export function getWordInfo(rawWord) {
 
   const cards = added
     ? getCards()
-        .filter((c) => !c.deleted && roots.includes(c.root_word))
+        .filter((c) => !c.deleted && roots.includes(studyRootOf(c.root_word)))
         .map((c) => ({ type: c.type, phase: c.phase, reps: c.reps, lapses: c.lapses }))
     : [];
 
@@ -167,6 +169,17 @@ function cardId(type, rootWord, prompt) {
   return [type, rootWord, prompt].join('␟');
 }
 
+/** The identity of a jumble as far as being already in the deck goes: the
+ * letters shown and the word they spell. Two roots can build the same
+ * jumble — ALLOT's set now includes REALLOT's, which a REALLOT studied as
+ * a root of its own already has; MAN and MON both have MEN — and a card
+ * for the same question twice is only the same work done twice. (The
+ * answer is part of the key because different words can share a jumble:
+ * BARITONE and OBTAINER.) */
+function jumbleKey(card) {
+  return `${card.prompt}␟${card.answer}`;
+}
+
 function addRootToStudy(rootWord, viaWord, now, phase, selected, cards) {
   const specs = buildCardSpecs(rootWord);
   if (!specs) return 0;
@@ -174,27 +187,98 @@ function addRootToStudy(rootWord, viaWord, now, phase, selected, cards) {
   const nowIso = now.toISOString();
   selected.push({ root_word: rootWord, via_word: viaWord, selected_at: nowIso, updated_at: nowIso });
 
+  const haveJumbles = new Set(cards.filter((c) => !c.deleted && c.type === 'jumble').map(jumbleKey));
+  const haveIds = new Set(cards.map((c) => c.id));
   const base = initialState(now);
+  let added = 0;
   for (const spec of specs) {
-    cards.push({
-      id: cardId(spec.type, rootWord, spec.prompt),
-      root_word: rootWord,
-      type: spec.type,
-      prompt: spec.prompt,
-      answer: spec.answer,
-      interval_days: base.interval_days,
-      ease: base.ease,
-      reps: base.reps,
-      lapses: base.lapses,
-      due_at: base.due_at,
-      last_reviewed_at: base.last_reviewed_at,
-      created_at: nowIso,
-      updated_at: nowIso,
-      phase,
-      deleted: 0,
-    });
+    // A card is identified by its type, root and prompt, so two forms of
+    // one root that are anagrams of each other would collide on one id.
+    const id = cardId(spec.type, spec.root || rootWord, spec.prompt);
+    if (haveIds.has(id)) continue;
+    haveIds.add(id);
+    if (spec.type === 'jumble') {
+      if (haveJumbles.has(jumbleKey(spec))) continue;
+      haveJumbles.add(jumbleKey(spec));
+    }
+    cards.push(newCard(spec, spec.root || rootWord, base, nowIso, phase));
+    added++;
   }
-  return specs.length;
+  return added;
+}
+
+function newCard(spec, rootWord, base, nowIso, phase) {
+  return {
+    id: cardId(spec.type, rootWord, spec.prompt),
+    root_word: rootWord,
+    type: spec.type,
+    prompt: spec.prompt,
+    answer: spec.answer,
+    interval_days: base.interval_days,
+    ease: base.ease,
+    reps: base.reps,
+    lapses: base.lapses,
+    due_at: base.due_at,
+    last_reviewed_at: base.last_reviewed_at,
+    created_at: nowIso,
+    updated_at: nowIso,
+    phase,
+    deleted: 0,
+  };
+}
+
+/** Brings a deck in line with RE- words being part of their root's set
+ * rather than roots of their own (see obviousReBase), and says whether it
+ * changed anything. Safe to run any number of times.
+ *
+ *  - An obvious RE- word already studied as a root (REALLOT, REDO) loses
+ *    its definition cards. Its endings and jumble cards stay: those are
+ *    still true and may hold progress.
+ *  - Every studied root gains the jumbles for its own RE- form and that
+ *    form's conjugations, skipping any the deck already has (under
+ *    whichever root has them). They enter as intro cards, since they are
+ *    new to you.
+ *
+ * Removal is a tombstone stamped with the current time, the same as any
+ * other write, so it syncs like one. When sync is set up this should run
+ * only after a sync has completed: the cards it adds have fixed ids, so
+ * a copy made on another device — and perhaps already answered there —
+ * would be overwritten by a blank one stamped later. */
+export async function reconcileReForms() {
+  const cards = getCards();
+  const selected = getSelected();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  let changed = false;
+
+  for (const card of cards) {
+    if (card.deleted || (card.type !== 'word2def' && card.type !== 'def2word')) continue;
+    if (!obviousReBase(card.root_word)) continue;
+    card.deleted = 1;
+    card.updated_at = nowIso;
+    changed = true;
+  }
+
+  const have = new Set(cards.filter((c) => !c.deleted && c.type === 'jumble').map(jumbleKey));
+  const base = initialState(now);
+  for (const { root_word: root } of selected) {
+    for (const spec of reFormJumbleSpecs(root)) {
+      if (have.has(jumbleKey(spec))) continue;
+      have.add(jumbleKey(spec));
+      const id = cardId(spec.type, spec.root, spec.prompt);
+      const existing = cards.find((c) => c.id === id);
+      if (existing) {
+        // A tombstone of the same id: bring it back as a new card.
+        Object.assign(existing, newCard(spec, spec.root, base, nowIso, 'intro'));
+      } else {
+        cards.push(newCard(spec, spec.root, base, nowIso, 'intro'));
+      }
+      changed = true;
+    }
+  }
+
+  if (changed) await set(KEY_CARDS, cards);
+  return changed;
 }
 
 /** Picks a uniformly-random word from the whole dictionary that still
@@ -203,7 +287,7 @@ function addRootToStudy(rootWord, viaWord, now, phase, selected, cards) {
 function pickRandomNewWord(selectedSet) {
   for (let attempt = 0; attempt < MAX_PICK_ATTEMPTS; attempt++) {
     const word = pickRandomWord();
-    const roots = resolveRoots(word);
+    const roots = resolveStudyRoots(word);
     if (roots.some((r) => !selectedSet.has(r))) return word;
   }
   return null;
@@ -214,7 +298,7 @@ function pickRandomNewWord(selectedSet) {
  * Returns how many cards and roots were newly added (both 0 if every
  * root `word` resolves to was already studied). */
 function addWordToStudy(word, now, phase, selected, selectedSet, cards) {
-  const roots = resolveRoots(word);
+  const roots = resolveStudyRoots(word);
   const newRoots = roots.filter((r) => !selectedSet.has(r));
   let cardsAdded = 0;
   for (const root of newRoots) {
@@ -285,6 +369,20 @@ function reviewPriority(card, nowMs) {
   const overdueRatio = (nowMs - dueAtMs) / intervalMs;
   const difficulty = DEFAULT_EASE - card.ease;
   return overdueRatio + difficulty;
+}
+
+/** A specific card to show, in the same shape getNextCard answers with —
+ * or null when it can't be shown: it is gone, deleted, or no longer in
+ * rotation (a card held out in the recently-missed pile is never
+ * selected, and being asked it again would undo that). Used to put back
+ * the card that was on screen when the app was closed. */
+export function getCardById(id) {
+  if (!id) return null;
+  const cards = getCards().filter((c) => !c.deleted);
+  const card = cards.find((c) => c.id === id);
+  if (!card || (card.phase !== 'intro' && card.phase !== 'review')) return null;
+  const introRemaining = card.phase === 'intro' ? cards.filter((c) => c.phase === 'intro').length : 0;
+  return { card, introRemaining };
 }
 
 /** Picks one card from `cards` using the usual intro-first, then

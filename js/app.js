@@ -2,6 +2,8 @@ import { loadDictionary } from './dictionary.js';
 import {
   generateIntroBatch,
   getNextCard,
+  getCardById,
+  reconcileReForms,
   answerCard,
   getStats,
   getDeckAnagramSolutions,
@@ -21,7 +23,7 @@ import {
   onImagesEnabledChange,
   keepImagesAcrossReload,
 } from './images.js';
-import { currentEndingsAnswer } from './cards.js';
+import { currentEndingsAnswer, currentDefinitionText } from './cards.js';
 import { imageSubjectFor } from './dictionary.js';
 import { fetchVersion } from './version.js';
 import { initPersistence } from './idb-store.js';
@@ -155,7 +157,9 @@ function blurBlock(kind) {
 function renderWordDefCard(card, revealed) {
   const wordGiven = card.type === 'word2def';
   const word = wordGiven ? card.prompt : card.answer;
-  const definition = wordGiven ? card.answer : card.prompt;
+  // Shown as the dictionary words it today, not as it was stored — see
+  // currentDefinitionText.
+  const definition = currentDefinitionText(card.root_word) ?? (wordGiven ? card.answer : card.prompt);
   const definitionVisible = revealed || !wordGiven;
   const wordHighlight = revealed && !wordGiven ? ' answer-highlight' : '';
   const defHighlight = revealed && wordGiven ? ' answer-highlight' : '';
@@ -254,14 +258,47 @@ let currentIntroRemaining = 0;
 // redrawing it (see the pictures toggle) puts it back in the same state.
 let currentRevealed = false;
 
+// The card on screen is remembered on this device, so closing the app
+// before answering — or the app reloading itself for a new version — puts
+// the same card back instead of drawing a different one and leaving that
+// one for some later turn. Per device, not synced: it is about this
+// screen, not about the deck. Storage can be unavailable or throw, in
+// which case the app simply behaves as it did before.
+const KEY_CURRENT_CARD = 'scrabbleStudy.currentCardId';
+
+function rememberCurrentCard(id) {
+  try {
+    if (id) localStorage.setItem(KEY_CURRENT_CARD, id);
+    else localStorage.removeItem(KEY_CURRENT_CARD);
+  } catch {
+    /* nothing to do: just no resume */
+  }
+}
+
+function rememberedCardId() {
+  try {
+    return localStorage.getItem(KEY_CURRENT_CARD);
+  } catch {
+    return null;
+  }
+}
+
+/** Shows the next card. When nothing is on screen yet — the app was just
+ * opened — that is the card that was on screen when it was last closed, if
+ * it is still there to be asked, shown as a fresh question rather than
+ * with its answer. Once a card has been answered the remembered one is
+ * cleared, so this only ever brings back a card that was left unanswered. */
 function loadNextCard() {
-  const { card, introRemaining } = getNextCard(currentCard ? currentCard.id : null);
+  const resumed = currentCard ? null : getCardById(rememberedCardId());
+  const { card, introRemaining } = resumed || getNextCard(currentCard ? currentCard.id : null);
   if (!card) {
     currentCard = null;
+    rememberCurrentCard(null);
     studyCard.innerHTML = '<p class="card-empty">No cards yet.</p>';
     return;
   }
   currentCard = card;
+  rememberCurrentCard(card.id);
   currentIntroRemaining = introRemaining;
   renderQuestion();
 }
@@ -379,6 +416,8 @@ async function grade(correct) {
     if (!result) {
       throw new Error(`card ${currentCard.id} no longer exists locally`);
     }
+    // Answered: closing the app now must not bring this card back.
+    rememberCurrentCard(null);
     const { mistakeBatch, introBatchFinished, wasReview } = result;
 
     const { streak, milestoneHit } = await recordAnswer(correct, wasReview);
@@ -483,6 +522,20 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkForNewVersion();
 });
 
+/** See reconcileReForms. Run at startup when there is no sync, and after
+ * each completed sync otherwise — a sync can bring back cards that were
+ * removed, or leave a device without a card another one already has. */
+async function reconcileReFormsAndRefresh(refreshAfter) {
+  try {
+    if (!(await reconcileReForms())) return;
+  } catch (err) {
+    console.error('Reconciling RE- words failed:', err);
+    return;
+  }
+  if (refreshAfter) refreshStats();
+  scheduleSync();
+}
+
 (async function init() {
   studyCard.innerHTML = '<p class="card-empty">Loading dictionary&hellip;</p>';
   try {
@@ -497,6 +550,8 @@ document.addEventListener('visibilitychange', () => {
     studyCard.innerHTML = `<p class="card-empty">Failed to open local storage: ${err.message}</p>`;
     return;
   }
+  // With sync set up, wait for a sync to finish first (see below).
+  if (!getSyncId()) await reconcileReFormsAndRefresh(false);
   refreshStats();
   loadNextCard();
   initSyncUI(syncPanelEl);
@@ -528,6 +583,7 @@ document.addEventListener('visibilitychange', () => {
   let wasSyncing = false;
   onStatusChange((status) => {
     if (wasSyncing && status.state !== 'syncing') {
+      if (status.state === 'idle') reconcileReFormsAndRefresh(true);
       refreshStats();
       if (!currentCard) loadNextCard();
       maybeBootstrap();

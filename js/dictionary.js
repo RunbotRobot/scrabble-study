@@ -67,6 +67,54 @@ export function resolveRoots(word) {
   return [...roots];
 }
 
+/** The root an "obvious" RE- word is really just the root again, or null
+ * when `word` is not one: REALLOT is "to allot again", and nothing more
+ * needs saying about it once ALLOT is known.
+ *
+ * Obvious is decided from the definition, since that is the only thing
+ * that separates REALLOT from REPORTER ("one that reports" — not "to
+ * porter again") or RELAY (which does mean "to lay again", and also a
+ * second, unrelated thing, so it has to be learned in its own right).
+ * Every sense has to be the plain "to <root> again"; REDO is allowed its
+ * noun sense, "something that is done again", which is that same thing
+ * seen from the other side. The root has to be a word in its own right,
+ * so RELUME ("to light again", with no LUME to be found) is left alone.
+ *
+ * Such a word is never given definition cards of its own, and a lookup of
+ * it lands on the root (see resolveStudyRoots). */
+export function obviousReBase(word) {
+  requireLoaded();
+  if (!word.startsWith('RE')) return null;
+  const base = word.slice(2);
+  const entry = words[word];
+  if (!entry || !entry.s || !words[base] || !words[base].s) return null;
+  const again = `to ${base.toLowerCase()} again`;
+  const noun = /^something that is \w+ again$/;
+  let sawVerb = false;
+  for (const sense of entry.s) {
+    const d = (sense.d || '').toLowerCase();
+    if (d === again) sawVerb = true;
+    else if (!(sense.p === 'n' && noun.test(d))) return null;
+  }
+  return sawVerb ? base : null;
+}
+
+/** `resolveRoots`, but with each obvious RE- word (see obviousReBase)
+ * replaced by the root it is built on, so the word is studied as part of
+ * that root's set rather than as a root of its own. REALLOT, or
+ * REALLOTTED, gives ALLOT. Chains collapse all the way down. */
+export function resolveStudyRoots(word) {
+  return [...new Set(resolveRoots(word).map(studyRootOf))];
+}
+
+/** The root `root` is studied under: itself, or for an obvious RE- word
+ * the root it is built on. */
+export function studyRootOf(root) {
+  let base = root;
+  for (let next = obviousReBase(base); next; next = obviousReBase(base)) base = next;
+  return base;
+}
+
 /** Every part of speech `word` is listed under — from its own senses
  * and from any crossref. The crossref matters: most of the dictionary's
  * -LY adverbs (COZILY, NAGGINGLY) have no sense of their own at all,
@@ -170,7 +218,8 @@ function enrichThinDefinition(definition, root) {
  * generating their own. Returns null if `word` has no root with a real
  * definition to draw from. */
 export function imageSubjectFor(word) {
-  const roots = resolveRoots(word);
+  // REDRY has no picture of its own: it is DRY's.
+  const roots = resolveStudyRoots(word);
   const root = roots[0];
   if (!root) return null;
   const senses = getRootSenses(root);
